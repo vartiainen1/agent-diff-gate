@@ -17,8 +17,8 @@ SESSION NOTE (2026-08-11): agent-diff-gate v0.1.0 BUILT — first session
 - Dogfooding caught 3 real bugs, all logged in errors.txt before fixing:
   R3 try-scope never reset after except; R5 ignored the diff's own context
   lines in offline mode; R3 reset regex missed typed except handlers.
-- 92 tests green (parser + rules + gate + log tooling + process-style
-  output-value integration). README count 92 verified by the drift guard.
+- 108 tests green (parser + rules + gate + log tooling + process-style
+  output-value integration). README count 108 verified by the drift guard.
 - Kit shipped: README, rules.txt, errors.txt, notes.txt, CHANGELOG,
   AGENTS.md, pyproject.toml, SECURITY, CONTRIBUTING, CoC, LICENSE, hooks/
   installer + commit-msg hook, CI + release + publish workflows, start.py.
@@ -36,8 +36,17 @@ SESSION NOTE (2026-08-11): R6-R8 added - three new rules
   int(input(...)) / parseInt(req.query...) without a guard, try-aware like
   R3. R8 dangerous-eval-exec (MEDIUM): eval/exec/compile + new Function +
   subprocess shell=True; (?<![\w.]) keeps re.compile / .exec clean.
-- 30 new tests (positive + negative + process integration) -> 92 green.
+- 46 new tests (positive + negative + process integration) -> 108 green.
   Counts synced in README/CHANGELOG/CONTRIBUTING/AGENTS/notes/rules.
+- Review round (logged before fixing): R14 concat/format narrowed to the
+  SQL-string form (computed params stay clean), text() dropped from SQL
+  patterns (non-SQL FP), R13 load_all/Unpickler covered. Dogfood verified:
+  --range/--staged/warn-only live.
+- Round 4 (user request): R12 hardcoded-config-credentials (connection
+  strings + JWTs, HIGH), R13 unsafe-deserialization (pickle/yaml.load/
+  unserialize HIGH, XML XXE MEDIUM), R14 sql-injection (f-string/template/
+  format/concat, HIGH). Test-caught bug: SQL concat pattern missed
+  '+ variable' form - logged and fixed. Dogfood verified live.
 - Review round (logged before fixing): R11 markers uppercase-only (lowercase
   todo/hack/xxx are identifiers), R9 sources narrowed (request/req/event;
   name heuristic = 'input' only; f-string), R10 inline-swallow test added.

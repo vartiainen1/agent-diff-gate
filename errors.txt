@@ -198,6 +198,36 @@ ACTIVE / RECENT ENTRIES
   FIX: add a one-line 'except Exception: pass' negative test for R10
   STATUS: FIXED.
 
+[2026-08-11] AREA: feature request: add R12 hardcoded config credentials, R13 unsafe deserialization, R14 SQL injection rules
+  ERROR: the gate covers R1-R11 but not: connection strings/JWTs with embedded credentials (non-secret shapes), pickle/yaml.load/unserialize/XML parsers, or SQL statements built from f-strings/template literals/concatenation
+  CAUSE: feature request from the user; must follow the family standard - positive AND negative tests, no false positives on clean code (safe_load, json.loads, %s-parameterized execute, plain strings all stay clean)
+  FIX: implemented R12/R13/R14 with hex-escape quote classes, comment-skip; 12 tests + 4 review-round regressions = 108 green; counts synced; dogfood verified (range/staged/warn-only); committed through the gate
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R14 SQL concat pattern misses 'string + variable' injections (test-caught)
+  ERROR: SQL_CONCAT_RE required a quote character right after the '+' ([\x22\x27]), so 'execute("SELECT ... WHERE x=" + val)' - the classic variable-concatenation injection - is not flagged (test asserts 2 findings, only the .format() one fires)
+  CAUSE: the pattern assumed concatenation of a string literal (+ "...") instead of the actual injection form (+ variable); the new test pinned it
+  FIX: '+' is flagged only when adjacent to the SQL string literal and before the first comma - parameterized computed args stay clean (final)
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R14 SQL_CONCAT/format patterns false-positive on parameterized args (reviewer)
+  ERROR: SQL_CONCAT_RE ([^)]*\+) flags ANY plus inside an execute call - clean code like execute('SELECT * FROM t', (a + b,)) is reported as HIGH SQL injection; SQL_FORMAT_RE has the same hole for a formatted PARAM ('SELECT %s', '{}'.format(x))
+  CAUSE: the [^)]* scan does not stop at the argument separator (comma), so a computed parameter looks like SQL string-building
+  FIX: require the +/.format to be adjacent to a quote AND before the first comma: [^,)]*[quote]\s*\+ and [^,)]*[quote]\.format; add a negative test for execute('...', (a + b,))
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R14 text() in SQL patterns false-positives on non-SQL code (reviewer)
+  ERROR: PY_FSQL_RE and SQL_FORMAT_RE include text( - but 'text' is a common non-SQL function name, so text(f'hello {name}') in UI/rendering code is reported as HIGH SQL injection and fails the default gate
+  CAUSE: 'text' was added to cover SQLAlchemy's text() but its FP surface at HIGH severity is too wide
+  FIX: drop text from both patterns; execute/executemany/raw_query cover the realistic injection surface; add a negative test
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R13 yaml.load_all and pickle.Unpickler not covered (reviewer)
+  ERROR: YAML_LOAD_RE matches only yaml.load( - yaml.load_all( is equally unsafe (FullLoader default); PICKLE_RE misses pickle.Unpickler(...) which also loads pickles
+  CAUSE: the alternations were written for the most common forms only
+  FIX: extend: yaml.load(?:_all)? and pickle.(?:load|loads|Unpickler); add positive tests for both
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

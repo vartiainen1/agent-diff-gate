@@ -14,6 +14,9 @@ the churn / vulnerability patterns AI-generated code tends to produce:
   R9 missing-path-validation  Path()/open() from input/request/argv (Python, MEDIUM)
   R10 broad-exception        except Exception/BaseException catches everything (MEDIUM)
   R11 todo-marker            TODO/FIXME/XXX/HACK markers in added lines (LOW)
+  R12 hardcoded-config-credentials  connection strings / JWTs with embedded creds (HIGH)
+  R13 unsafe-deserialization pickle/yaml.load/unserialize/XML parsers (HIGH/MEDIUM)
+  R14 sql-injection         SQL built from f-strings/template literals/concat (HIGH)
 
 Stdlib only, zero dependencies, works offline. Run from a git repo:
 
@@ -199,6 +202,9 @@ R8_NAME = "dangerous-eval-exec"
 R9_NAME = "missing-path-validation"
 R10_NAME = "broad-exception"
 R11_NAME = "todo-marker"
+R12_NAME = "hardcoded-config-credentials"
+R13_NAME = "unsafe-deserialization"
+R14_NAME = "sql-injection"
 
 RULES = {
     "R1": R1_NAME,
@@ -212,6 +218,9 @@ RULES = {
     "R9": R9_NAME,
     "R10": R10_NAME,
     "R11": R11_NAME,
+    "R12": R12_NAME,
+    "R13": R13_NAME,
+    "R14": R14_NAME,
 }
 
 SECRET_PATTERNS = [
@@ -286,6 +295,26 @@ BROAD_EXCEPT_RE = re.compile(r"\bexcept\s+(?:BaseException|Exception)\b")
 TODO_MARKER_RE = re.compile(r"\b(?:TODO|FIXME|XXX|HACK)\b")
 
 
+
+# R12: credentials in non-secret shapes (connection strings, JWTs)
+CONNSTR_RE = re.compile(
+    r"\b(?:postgres|postgresql|mysql|mariadb|mssql|sqlserver|mongodb|redshift|"
+    r"jdbc|amazon-redshift)\w*://[A-Za-z0-9_.-]+:[^@\s/]+@"
+)
+JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")
+# R13: unsafe deserialization
+PICKLE_RE = re.compile(r"\bpickle\.(?:load|loads|Unpickler)\s*\(")
+YAML_LOAD_RE = re.compile(r"\byaml\.load(?:_all)?\s*\(")
+PHP_UNSERIALIZE_RE = re.compile(r"\bunserialize\s*\(")
+XML_PARSER_RE = re.compile(r"\b(?:xml\.etree|lxml\.etree|xml\.dom\.minidom|xml\.sax)\b")
+# R14: SQL built from strings (quotes written as hex escapes - no literal quote
+# chars in the pattern source, so the fragment transport cannot mangle them)
+PY_FSQL_RE = re.compile(r"\b(?:execute|executemany|raw_query)\s*\(\s*f[\x22\x27][^\x22\x27{}]*\{")
+JS_SQL_TPL_RE = re.compile(r"\b(?:query|execute)\s*\(\s*`[^`]*\$\{")
+SQL_FORMAT_RE = re.compile(r"\b(?:execute|executemany|raw_query)\s*\([^,)]*[\x22\x27]\.format\s*\(")
+SQL_CONCAT_RE = re.compile(r"\b(?:execute|executemany|query)\s*\([^,)]*[\x22\x27]\s*\+")
+
+
 DEFAULT_SUGGEST = {
     R1_NAME: "load secrets from environment / a secret store; never commit tokens",
     R2_NAME: "let the error surface (log + re-raise) or handle it; do not swallow it",
@@ -298,6 +327,9 @@ DEFAULT_SUGGEST = {
     R9_NAME: "validate the path against an allowlist base directory and reject traversal (../)",
     R10_NAME: "catch specific exceptions (ValueError, OSError, ...) and re-raise or log",
     R11_NAME: "finish the work or track it in an issue; do not commit markers",
+    R12_NAME: "move connection strings / tokens to environment or a secret store",
+    R13_NAME: "avoid pickle/yaml.load/unserialize on untrusted data; use yaml.safe_load / json / defusedxml",
+    R14_NAME: "use parameterized queries or prepared statements instead of building SQL from strings",
 }
 
 
@@ -658,6 +690,95 @@ def rule_todo_markers(f: DiffFile) -> list[tuple]:
             ))
     return out
 
+
+def rule_config_credentials(f: DiffFile) -> list[tuple]:
+    """R12: connection strings / JWTs with embedded credentials - secrets in
+    shapes R1 does not cover."""
+    out = []
+    for ln in f.added:
+        if _looks_commented(ln.text):
+            continue
+        if re.search(CONNSTR_RE, ln.text):
+            out.append((
+                "HIGH", "R12", f.path, ln.lineno,
+                "hardcoded connection string with embedded credentials",
+                DEFAULT_SUGGEST[R12_NAME],
+            ))
+        if re.search(JWT_RE, ln.text):
+            out.append((
+                "HIGH", "R12", f.path, ln.lineno,
+                "hardcoded JWT token in an added line",
+                DEFAULT_SUGGEST[R12_NAME],
+            ))
+    return out
+
+
+def rule_unsafe_deserialization(f: DiffFile) -> list[tuple]:
+    out = []
+    for ln in f.added:
+        if _looks_commented(ln.text):
+            continue
+        if re.search(PICKLE_RE, ln.text):
+            out.append((
+                "HIGH", "R13", f.path, ln.lineno,
+                "pickle.load/loads on (possibly untrusted) data - "
+                "arbitrary-code-execution risk",
+                DEFAULT_SUGGEST[R13_NAME],
+            ))
+        if re.search(YAML_LOAD_RE, ln.text):
+            out.append((
+                "HIGH", "R13", f.path, ln.lineno,
+                "yaml.load() is unsafe by default - arbitrary-code-execution "
+                "risk on untrusted input",
+                DEFAULT_SUGGEST[R13_NAME],
+            ))
+        if re.search(PHP_UNSERIALIZE_RE, ln.text):
+            out.append((
+                "HIGH", "R13", f.path, ln.lineno,
+                "PHP unserialize() on untrusted data - object injection",
+                DEFAULT_SUGGEST[R13_NAME],
+            ))
+        if re.search(XML_PARSER_RE, ln.text):
+            out.append((
+                "MEDIUM", "R13", f.path, ln.lineno,
+                "XML parser without external-entity protection - XXE risk",
+                DEFAULT_SUGGEST[R13_NAME],
+            ))
+    return out
+
+
+def rule_sql_injection(f: DiffFile) -> list[tuple]:
+    out = []
+    for ln in f.added:
+        t = ln.text
+        if _looks_commented(t):
+            continue
+        if re.search(PY_FSQL_RE, t):
+            out.append((
+                "HIGH", "R14", f.path, ln.lineno,
+                "f-string interpolated into an SQL statement - injection risk",
+                DEFAULT_SUGGEST[R14_NAME],
+            ))
+        if re.search(JS_SQL_TPL_RE, t):
+            out.append((
+                "HIGH", "R14", f.path, ln.lineno,
+                "template literal interpolated into a query - injection risk",
+                DEFAULT_SUGGEST[R14_NAME],
+            ))
+        if re.search(SQL_FORMAT_RE, t):
+            out.append((
+                "HIGH", "R14", f.path, ln.lineno,
+                "format() used to build an SQL statement - injection risk",
+                DEFAULT_SUGGEST[R14_NAME],
+            ))
+        if re.search(SQL_CONCAT_RE, t):
+            out.append((
+                "HIGH", "R14", f.path, ln.lineno,
+                "string concatenation inside an SQL call - injection risk",
+                DEFAULT_SUGGEST[R14_NAME],
+            ))
+    return out
+
 # ===========================================================================
 # analysis + output
 # ===========================================================================
@@ -728,6 +849,12 @@ def analyze(
         for sev, rule, file, line, msg, sugg in rule_broad_exception(f):
             add(sev, rule, file, line, msg, sugg)
         for sev, rule, file, line, msg, sugg in rule_todo_markers(f):
+            add(sev, rule, file, line, msg, sugg)
+        for sev, rule, file, line, msg, sugg in rule_config_credentials(f):
+            add(sev, rule, file, line, msg, sugg)
+        for sev, rule, file, line, msg, sugg in rule_unsafe_deserialization(f):
+            add(sev, rule, file, line, msg, sugg)
+        for sev, rule, file, line, msg, sugg in rule_sql_injection(f):
             add(sev, rule, file, line, msg, sugg)
 
     return findings[:max_findings] if max_findings > 0 else findings

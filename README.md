@@ -28,7 +28,7 @@ Agent Diff Gate is **local, free, offline, and deterministic** — a single
 stdlib Python file you can drop into any repo, with no network and no data
 leaving the machine.
 
-## The eleven rules
+## The fourteen rules
 
 | Rule | Pattern | Severity |
 |------|---------|----------|
@@ -43,6 +43,9 @@ leaving the machine.
 | R9 `missing-path-validation` | `Path(input(...))` / `open(req…)` — path from user input (Python) | MEDIUM |
 | R10 `broad-exception` | `except Exception` / `except BaseException` with a real body | MEDIUM |
 | R11 `todo-marker` | `TODO` / `FIXME` / `XXX` / `HACK` markers in added lines | LOW |
+| R12 `hardcoded-config-credentials` | connection strings with embedded creds, hardcoded JWTs | HIGH |
+| R13 `unsafe-deserialization` | `pickle.load(s)` / `yaml.load` / PHP `unserialize` (HIGH), XML parsers (MEDIUM) | HIGH |
+| R14 `sql-injection` | SQL built from f-strings, template literals, `.format()` or concatenation | HIGH |
 
 Every finding reports `file:line`, the rule, a plain-language message, and a
 concrete suggestion.
@@ -173,6 +176,25 @@ swallow-shapes (`except Exception: pass` / lone `pass` body) are left to R2.
 `TODO` / `FIXME` / `XXX` / `HACK` markers left in added lines — the diff
 contains unfinished work that should be tracked, not committed silently.
 
+### R12 — hardcoded config credentials (HIGH)
+Connection strings with embedded credentials (`postgres://user:pass@…`,
+`mysql://…`, `mongodb://…`, `jdbc:…`) and hardcoded JWT tokens — secrets in
+shapes R1 does not cover. `sqlite:///` local files and env lookups are not
+flagged.
+
+### R13 — unsafe deserialization (HIGH / MEDIUM)
+`pickle.load/loads`, `yaml.load` (unsafe by default) and PHP `unserialize`
+can execute arbitrary code on untrusted input (HIGH). XML parsers
+(`xml.etree`, `lxml.etree`, `minidom`, `xml.sax`) without external-entity
+protection are an XXE risk (MEDIUM). `yaml.safe_load` / `json.loads` stay
+clean.
+
+### R14 — SQL injection (HIGH)
+SQL statements built from strings — `execute(f"…{var}…")`, JS query
+template literals with `${…}`, `.format()` on a query, or `+` concatenation
+inside an `execute`/`query` call. Parameterized queries (`%s` + param
+tuple, prepared statements) are not flagged.
+
 ## Error-log discipline (this repo)
 
 This repo uses the **agent error-log system**: every error encountered is
@@ -182,9 +204,9 @@ Session notes live in `notes.txt`, distilled lessons in `rules.txt`. Run
 
 ## Tests
 
-`python _test_diff.py` — 92 tests covering the diff parser, all eleven rules
+`python _test_diff.py` — 108 tests covering the diff parser, all fourteen rules
 (happy + negative + edge), the gate model, the error-log tooling, and
-process-style output-value integration tests. all 92 should pass.
+process-style output-value integration tests. all 108 should pass.
 
 ## Companion tools
 

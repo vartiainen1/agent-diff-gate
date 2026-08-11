@@ -44,9 +44,9 @@ Reading order:
 - The product is `check_diff.py` — the diff gate. It also carries the
   error-log tooling (--add / --has-entry / --check-commit / --archive-days /
   --lessons / --log), mirroring the agent-error-log family.
-- The eleven rules (R1-R11) must never produce false positives on clean code:
+- The fourteen rules (R1-R14) must never produce false positives on clean code:
   every rule change needs a test, both positive and negative.
-- Validate my changes: run `python _test_diff.py` (all 92 should pass),
+- Validate my changes: run `python _test_diff.py` (all 108 should pass),
   `python check_diff.py --log` (log healthy), and compile-check the touched
   scripts. Verify OUTPUT VALUES, not just exit codes.
 
@@ -81,3 +81,6 @@ Distilled from errors.txt (see the log for the full symptom -> cause -> fix).
   one style silently misses the other.
 - Regexes that scan one line only (e.g. `[^)]*`) miss multi-line calls —
   track the open call across the added-run instead.
+- Heuristic regexes must match the REAL injection form: `+ "literal"` is
+  rare, `+ variable` is the SQLi classic - the test that pins a rule must
+  use the realistic shape or the bug ships (R14 concat, test-caught).

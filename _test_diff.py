@@ -854,6 +854,183 @@ class TestRules(unittest.TestCase):
         finds = findings_for(d, "R9")
         self.assertEqual([f for f in finds if f.rule == "R9"], [])
 
+    # --- R12 hardcoded config credentials ------------------------------
+    def test_r12_connection_string(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++db = "postgres://admin:hunter2@prod-db:5432/app"
+"""
+        finds = findings_for(d, "R12")
+        self.assertTrue(any(f.rule == "R12" and f.severity == "HIGH" for f in finds))
+
+    def test_r12_jwt_token(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++tok = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+"""
+        finds = findings_for(d, "R12")
+        self.assertTrue(any("JWT" in f.message for f in finds))
+
+    def test_r12_env_and_sqlite_ok(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++cfg = os.environ["DATABASE_URL"]
++local = "sqlite:///app.db"
+"""
+        finds = findings_for(d, "R12")
+        self.assertEqual([f for f in finds if f.rule == "R12"], [])
+
+    # --- R13 unsafe deserialization ------------------------------------
+    def test_r13_pickle(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++data = pickle.loads(raw)
+"""
+        finds = findings_for(d, "R13")
+        self.assertTrue(any(f.rule == "R13" and f.severity == "HIGH" for f in finds))
+
+    def test_r13_yaml_load(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++cfg = yaml.load(stream)
+"""
+        finds = findings_for(d, "R13")
+        self.assertTrue(any("yaml" in f.message for f in finds))
+
+    def test_r13_xml_xxe(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++tree = xml.etree.ElementTree.parse(fh)
+"""
+        finds = findings_for(d, "R13")
+        self.assertTrue(any(f.rule == "R13" and f.severity == "MEDIUM" for f in finds))
+
+    def test_r13_safe_alternatives_ok(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,4 @@
+ ok
++cfg = yaml.safe_load(stream)
++data = json.loads(raw)
++enc = pickle.dumps(obj)
+"""
+        finds = findings_for(d, "R13")
+        self.assertEqual([f for f in finds if f.rule == "R13"], [])
+
+    # --- R14 SQL injection ---------------------------------------------
+    def test_r14_fstring_execute(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++cur.execute(f"SELECT * FROM users WHERE id={uid}")
+"""
+        finds = findings_for(d, "R14")
+        self.assertTrue(any(f.rule == "R14" and f.severity == "HIGH" for f in finds))
+
+    def test_r14_js_template_query(self):
+        d = """diff --git a/x.js b/x.js
+--- a/x.js
++++ b/x.js
+@@ -1 +1,2 @@
+ ok
++conn.query(`SELECT * FROM t WHERE name = '${name}'`)
+"""
+        finds = findings_for(d, "R14")
+        self.assertTrue(any("template literal" in f.message for f in finds))
+
+    def test_r14_concat_and_format(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++cur.execute("SELECT * FROM t WHERE x=" + val)
++cur.execute("SELECT {} FROM t".format(col))
+"""
+        finds = findings_for(d, "R14")
+        self.assertEqual(len([f for f in finds if f.rule == "R14"]), 2)
+
+    def test_r14_parameterized_ok(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++cur.execute("SELECT * FROM users WHERE id=%s", (uid,))
++cur.execute("SELECT 1")
+"""
+        finds = findings_for(d, "R14")
+        self.assertEqual([f for f in finds if f.rule == "R14"], [])
+
+    def test_r14_parameterized_with_computed_arg_ok(self):
+        # regression (reviewer): a computed PARAMETER is not SQL string-building
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++cur.execute("SELECT * FROM t", (a + b,))
+"""
+        finds = findings_for(d, "R14")
+        self.assertEqual([f for f in finds if f.rule == "R14"], [])
+
+    def test_r14_non_sql_text_ok(self):
+        # regression (reviewer): text() is a common non-SQL function name
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++label = text(f"hello {name}")
+"""
+        finds = findings_for(d, "R14")
+        self.assertEqual([f for f in finds if f.rule == "R14"], [])
+
+    def test_r13_yaml_load_all(self):
+        # regression (reviewer): load_all is unsafe too (FullLoader default)
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++docs = yaml.load_all(stream)
+"""
+        finds = findings_for(d, "R13")
+        self.assertTrue(any(f.rule == "R13" and f.severity == "HIGH" for f in finds))
+
+    def test_r13_pickle_unpickler(self):
+        # regression (reviewer): Unpickler also loads pickles
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++up = pickle.Unpickler(fh)
+"""
+        finds = findings_for(d, "R13")
+        self.assertTrue(any(f.rule == "R13" and f.severity == "HIGH" for f in finds))
+
 # ===========================================================================
 # gate / severity model
 # ===========================================================================
@@ -1130,6 +1307,25 @@ class TestIntegration(unittest.TestCase):
         payload = json.loads(out)
         self.assertEqual(payload["gate"], "FAIL")
         self.assertEqual({f["rule"] for f in payload["findings"]}, {"R9", "R10", "R11"})
+
+    def test_new_rules_r12_r13_r14_process(self):
+        # R12-R14 are HIGH (and R13 XML is MEDIUM) - the default gate must FAIL
+        d = """diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -1,5 +1,8 @@
+ def main():
+     cfg = load()
++    db = "postgres://admin:hunter2@prod-db/app"
++    data = pickle.loads(raw)
++    cur.execute(f"SELECT * FROM users WHERE id={uid}")
+     return cfg
+"""
+        rc, out = run_tool("--stdin", "--rule", "R12,R13,R14", "--json", stdin=d)
+        self.assertEqual(rc, 1)
+        payload = json.loads(out)
+        self.assertEqual(payload["gate"], "FAIL")
+        self.assertEqual({f["rule"] for f in payload["findings"]}, {"R12", "R13", "R14"})
 
     def test_version(self):
         rc, out = run_tool("--version")
