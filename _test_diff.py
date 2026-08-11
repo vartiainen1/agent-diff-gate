@@ -189,6 +189,30 @@ def findings_for(diff_text, rule=None, root=None):
     return finds
 
 
+def _r6_for(url: str) -> list:
+    'R6 findings for a one-line diff that adds the given URL as code.'
+    d = f"""diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++URL = "{url}"
+"""
+    return [f for f in findings_for(d, "R6") if f.rule == "R6"]
+
+
+@contextlib.contextmanager
+def _extra_hosts(*hosts):
+    'Temporarily extend the R6 user allow-list; restores on exit.'
+    saved = set(cd.EXTRA_ALLOW_HOSTS)
+    cd.EXTRA_ALLOW_HOSTS.update(hosts)
+    try:
+        yield
+    finally:
+        cd.EXTRA_ALLOW_HOSTS.clear()
+        cd.EXTRA_ALLOW_HOSTS.update(saved)
+
+
 class TestRules(unittest.TestCase):
     # --- R1 hardcoded secrets -------------------------------------------
     def test_r1_github_token(self):
@@ -823,6 +847,90 @@ class TestRules(unittest.TestCase):
 +"""
         finds = findings_for(d, "R6")
         self.assertEqual([f for f in finds if f.rule == "R6"], [])
+
+    def test_r6_allow_host_flag(self):
+        # --allow-host suppresses R6 for that host (and its subdomains) via
+        # the real CLI wiring; unrelated hosts are still flagged
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,4 @@
+ ok
++URL = "https://api.internal.example/v1"
++STAGING = "https://staging.internal.example/v2"
++OTHER = "https://api.stripe.com/v1"
++"""
+        with tempfile.NamedTemporaryFile("w", suffix=".diff", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write(d)
+            tmp = fh.name
+        buf = io.StringIO()
+        try:
+            with _extra_hosts():
+                with contextlib.redirect_stdout(buf):
+                    rc = cd.main(["--file", tmp, "--json", "--max-findings", "0",
+                                  "--allow-host", "internal.example"])
+        finally:
+            os.unlink(tmp)
+        self.assertEqual(rc, 0)
+        try:
+            data = json.loads(buf.getvalue())
+        except json.JSONDecodeError:
+            self.fail("gate did not emit a JSON document")
+        r6 = [f for f in data["findings"] if f["rule"] == "R6"]
+        self.assertTrue(any("stripe.com" in f["message"] for f in r6))
+        self.assertFalse(any("internal.example" in f["message"] for f in r6))
+
+    def test_r6_allow_host_env_var(self):
+        # AGENT_DIFF_GATE_HOSTS (comma/space separated) suppresses R6
+        old = os.environ.get("AGENT_DIFF_GATE_HOSTS")
+        os.environ["AGENT_DIFF_GATE_HOSTS"] = "internal.example legacy.corp"
+        try:
+            hits = _r6_for("https://" + "api.internal.example/v1")
+        finally:
+            if old is None:
+                os.environ.pop("AGENT_DIFF_GATE_HOSTS", None)
+            else:
+                os.environ["AGENT_DIFF_GATE_HOSTS"] = old
+        self.assertEqual(hits, [])
+
+    def test_r6_allow_host_parent_domain(self):
+        # allowing the parent domain covers subdomains (dot-boundary suffix),
+        # but not lookalike hosts such as notcompany.com
+        with _extra_hosts("company.com"):
+            sub = _r6_for("https://" + "api.staging.company.com/v1")
+            lookalike = _r6_for("https://" + "notcompany.com/x")
+        self.assertEqual(sub, [])
+        self.assertTrue(any("notcompany.com" in f.message for f in lookalike))
+
+    def test_r6_allow_host_normalization(self):
+        # scheme / port / path / trailing dot / case are stripped when a host
+        # is added to the allow-list, so pasted URLs still match
+        with _extra_hosts("https://" + "API.Corp.Example:8443/v1/"):
+            hits = _r6_for("https://" + "api.corp.example/x")
+        self.assertFalse(hits)
+
+    def test_r6_docstring_urls_ok(self):
+        # URLs inside a docstring of the analyzed file are not endpoints
+        # baked into code (the documented R6 behavior); real code still is
+        # the analyzed file's docstring uses triple-single-quote markers so
+        # the fixture can live inside a triple-quoted block without closing
+        # it - the gate then reads the analyzed docstring as data, exactly
+        # like every other R6 fixture
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,6 @@
+ ok
++    '''API endpoints:
++    https://api.internal.example/v1
++    https://api.stripe.com/v1
++    '''
++url = "https://api.stripe.com/v1/charges"
++"""
+        r6 = [f for f in findings_for(d, "R6") if f.rule == "R6"]
+        self.assertTrue(any("api.stripe.com" in f.message for f in r6))
+        self.assertFalse(any("internal.example" in f.message for f in r6))
 
     # --- R7 missing input validation ------------------------------------
     def test_r7_int_input_python(self):

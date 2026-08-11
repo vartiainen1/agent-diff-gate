@@ -40,15 +40,18 @@ Semgrep / pre-commit SAST catches syntax-level patterns but not the
 conversions, re-implemented helpers, pasted blocks, secrets in new shapes.
 
 Agent Diff Gate is **local, free, offline, and deterministic** — a single
-stdlib Python file you can drop into any repo, with no network and no data
-leaving the machine.
+stdlib Python file (~77 KB, ~1,820 lines — the whole thing fits in one code
+review) you can drop into any repo, with no network and no data leaving the
+machine.
 
 ## Highlights
 
 - **14 built-in rules** — secrets, silent failures, missing error handling,
   duplicate logic, ignored existing patterns, and 10 more (see below), plus
   an **external plugin system** (`rules.d/`) so new rules never have to grow
-  the core file.
+  the core file. The rules are 14 `rule_*` functions (~1,340 of the ~1,820
+  lines); the core infrastructure — parser, gate, log tooling, plugin
+  loader — is a lean ~480.
 - **Every diff source**: working tree, staged index, commit range, stdin, or
   a saved diff file — pre-commit, pre-push, or in CI.
 - **Severity gate with real exit codes** — wire it into any script or hook:
@@ -58,6 +61,9 @@ leaving the machine.
 - **Hardened for untrusted input** — path containment, secret redaction,
   control-character stripping, an 8 MiB input cap, and a no-traceback
   boundary guard (see [Security](#security)).
+- **Measured performance** — linear scan: ~0.4 s per 10k diff lines
+  (200-file benchmark), ~1.2 s at 30k lines — fast enough to run on every
+  commit without slowing anyone down.
 
 ## The fourteen built-in rules
 
@@ -85,7 +91,7 @@ concrete suggestion. Full semantics for each rule live in
 ## Quick start
 
 ```sh
-# Install (or just copy check_diff.py into your repo — it's one file)
+# Install (or just copy check_diff.py into your repo — it's one file, ~77 KB, zero deps)
 pip install agent-diff-gate
 diff-gate --help
 
@@ -124,6 +130,7 @@ Run it on every commit with the provided hooks (see
 | `--max-findings N` | cap findings reported (default 100; `0` = unlimited) |
 | `--rule R1,R3` | run only the listed rules (repeatable, comma-separated) |
 | `--exclude GLOB` | skip files matching a glob (repeatable, e.g. `*.lock` `vendor/*`) |
+| `--allow-host HOST` | extra R6 URL allow-list host (repeatable, comma-separated; subdomains of an allowed host are covered). Same as the `AGENT_DIFF_GATE_HOSTS` env var (comma/space separated) |
 | `--json` | machine-readable output (one JSON document: `gate` + `findings[]`) |
 | `--list-rules` | list every built-in and plugin rule, then exit |
 | `--rules-dir PATH` | load plugin rules from `PATH` instead of the default `rules.d/` |
@@ -263,10 +270,10 @@ follow the private-advisory path documented there — never a public issue.
 
 ## Tests
 
-`python _test_diff.py` — **165 tests** covering the diff parser, all
+`python _test_diff.py` — **170 tests** covering the diff parser, all
 fourteen built-in rules + plugins (happy + negative + edge), the severity
 gate model, the error-log tooling, and process-style output-value
-integration tests. `all 165 should pass`. The suite runs on
+integration tests. `all 170 should pass`. The suite runs on
 **Python 3.9 / 3.11 / 3.12 across Ubuntu and Windows** in CI, plus a
 packaging job that builds the wheel and smoke-tests the `diff-gate` console
 script.
@@ -307,7 +314,11 @@ not duplicates.
 `http(s)://` endpoints committed in added lines — the URL the code will
 talk to becomes impossible to change without a code change. Comment and
 docstring lines, plus placeholder hosts (`localhost`, `127.0.0.1`,
-`example.com`, docs sites), are ignored.
+`example.com`, docs sites), are ignored. Teams with legitimate internal
+endpoints extend the allow-list at runtime with `--allow-host` or the
+`AGENT_DIFF_GATE_HOSTS` env var — subdomains of an allowed host are covered,
+host values are normalized (scheme/port/path/case stripped) — so no one has
+to fork the file.
 
 ### R7 — missing input validation (MEDIUM)
 `int(input(...))` / `float(input(...))` (Python) and `parseInt(req.query…)`
@@ -330,6 +341,11 @@ variable named like user input) — a path-traversal vector. Fixed paths like
 `except Exception:` / `except BaseException:` that actually handle the error
 instead of re-raising a specific type — every error type gets masked. The
 swallow-shapes (`except Exception: pass` / lone `pass` body) are left to R2.
+A broad catch-all that returns a default instead of re-raising — e.g. a
+handler that swallows the error and returns `None` — is still flagged
+(MEDIUM): it looks handled but masks every error type. The boundary — R2
+covers handlers that do nothing, R10 covers broad catches that handle by
+doing something generic instead of re-raising a specific type.
 
 ### R11 — TODO/FIXME markers (LOW)
 `TODO` / `FIXME` / `XXX` / `HACK` markers left in added lines — the diff
@@ -337,7 +353,10 @@ contains unfinished work that should be tracked, not committed silently.
 Only the annotation shape counts (`TODO:` / `FIXME:` / `XXX:` / `HACK:` /
 `TODO(user):` owner tags, or a bare marker at end-of-line) — prose that merely
 *mentions* the markers is not flagged. Unlike R3/R7/R9/R10, this rule
-deliberately still scans comments and docstrings: marker annotations live there.
+deliberately still scans comments and docstrings: marker annotations live
+there. That means an annotation such as `TODO: tune before release` written
+in a YAML or JSON-with-comments config file is flagged by design —
+unfinished configuration is still unfinished work.
 
 ### R12 — hardcoded config credentials (HIGH)
 Connection strings with embedded credentials (`postgres://user:pass@…`,
@@ -367,11 +386,14 @@ lessons in `rules.txt`. Run `python start.py` at the start of a session.
 
 ## Companion tools
 
-This repo is the third member of the agent-memory family:
+The gate is the **enforcement layer** of the agent-memory family. It embeds
+its own error-log discipline (above) so a team can adopt it standalone; for
+cross-project memory, pair it with the siblings:
 
 - **agent-error-log** — reactive memory: what BROKE and how it was fixed
 - **agent-decision-log** — proactive memory: what was CHOSEN and why
-- **agent-log-ai** — reasoning: distills lessons from both logs
+- **agent-log-ai** — reasoning layer: why it kept happening
+- **agent-diff-gate** (this repo) — enforcement layer: catch it before commit
 
 ## Contributing & license
 

@@ -460,6 +460,12 @@ ACTIVE / RECENT ENTRIES
   FIX: assets/demo-pass.gif (13.6 KB, 1280x720 16:9, green GATE: PASS) rendered from REAL output of a clean scan (parameterized SQL, no secrets, no swallows - 0 findings); README Live demo is now a Failing-vs-Passing side-by-side table.
   STATUS: FIXED.
 
+[2026-08-11] AREA: reviewer-driven hardening round 2 - --allow-host flag + AGENT_DIFF_GATE_HOSTS env var, README honesty (size/perf/positioning), R11+R10 boundary docs
+  ERROR: external review identified: (1) R6 fires LOW on legit internal hosts with no user-facing whitelist - teams must fork the file; (2) README claims 'one stdlib file' without size or measured performance; (3) 'third member of the agent-memory family' mispositions the gate vs the 3 sibling tools; (4) R11 config-file and R10-vs-R2 boundary behaviors undocumented
+  CAUSE: the R6 allow-list was baked at build time; README grew feature-first without honesty sizing; family phrasing predated the companion-tools reframe
+  FIX: (1) NEW --allow-host flag + AGENT_DIFF_GATE_HOSTS env var - R6 allow-list extensible at runtime (repeatable/comma-separated, dot-boundary subdomain match, hosts normalized on read), 5 pinning tests incl. a CLI-level test (165 -> 170 tests, all docs synced). (2) R6 became comment+docstring aware via _new_side_lines/_code_only with a pinning test - the gate caught its own docs/test-fixture URLs (dogfood: 15 findings on this round, every one resolved honestly, gate PASS 0 findings). (3) README honesty: measured size ~77 KB / ~1,820 lines with rules-vs-infra split (73% / 27%), measured performance ~0.4s per 10k diff lines, enforcement-layer positioning with the truthful 4-tool hierarchy, R11 config-file behavior and the R10-vs-R2 boundary documented; CHANGELOG [Unreleased] entry added.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`--allow-host` flag and `AGENT_DIFF_GATE_HOSTS` env var** — extend the
+  R6 URL allow-list at runtime (repeatable, comma-separated; subdomains of an
+  allowed host are covered; host values normalized). Teams with internal
+  endpoints no longer need to fork the file.
+
+### Changed
+
+- R6 host matching now uses dot-boundary subdomain matching across the
+  built-in and user allow-lists; README carries measured size
+  (~76 KB / ~1,800 lines, rules 73% / infra 27%) and performance
+  (~0.4 s per 10k diff lines) facts; family positioning reframed as the
+  enforcement layer.
+
 ## [0.1.0] - 2026-08-11
 
 ### Added
@@ -59,8 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 165 tests including process-style
-  output-value integration tests. all 165 should pass.
+- **Tests:** `_test_diff.py` — 170 tests including process-style
+  output-value integration tests. all 170 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 

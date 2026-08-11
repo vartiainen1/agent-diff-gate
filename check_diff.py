@@ -45,6 +45,7 @@ import argparse
 import fnmatch
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -338,6 +339,45 @@ URL_ALLOW_HOSTS = {
     "img.shields.io", "shields.io",  # README badge hosts (R6)
     "react.dev", "reactjs.org", "nodejs.org", "keepachangelog.com", "semver.org",
 }
+
+# User-extensible R6 allow-list: the --allow-host flag and/or the
+# AGENT_DIFF_GATE_HOSTS env var (comma/space separated). A team with legit
+# internal endpoints can whitelist them at runtime - no file fork required.
+EXTRA_ALLOW_HOSTS: set[str] = set()
+
+
+def _normalize_allow_host(h: str) -> str | None:
+    'Normalize a user-supplied host: strip scheme/port/path, lowercase, '
+    'drop a trailing dot. None for empty/meaningless values.'
+    h = h.strip().lower()
+    if "://" in h:
+        h = h.split("://", 1)[1]
+    h = h.split("/", 1)[0].split(":", 1)[0].rstrip(".")
+    return h or None
+
+
+def _host_allowed(host: str, allowed: frozenset) -> bool:
+    'Exact match or dot-boundary subdomain: `company.com` covers '
+    '`api.company.com` but never `notcompany.com`.'
+    if host in allowed:
+        return True
+    return any(host.endswith("." + a) for a in allowed)
+
+
+def _effective_url_allow_hosts() -> frozenset:
+    'Built-in list + --allow-host additions + AGENT_DIFF_GATE_HOSTS env.'
+    hosts = set(URL_ALLOW_HOSTS)
+    extra = set(EXTRA_ALLOW_HOSTS)
+    env = os.environ.get("AGENT_DIFF_GATE_HOSTS")
+    if env:
+        extra |= set(re.split(r"[,\s]+", env.strip()))
+    for h in extra:
+        norm = _normalize_allow_host(h)
+        if norm:
+            hosts.add(norm)
+    return frozenset(hosts)
+
+
 # R7: conversion of raw user/request input without validation (Python + JS)
 PY_RAW_INPUT_CONV_RE = re.compile(r"\b(int|float)\s*\(\s*input\s*\(")
 JS_RAW_PARSE_RE = re.compile(
@@ -743,15 +783,25 @@ def _code_only(t: str, in_doc: str | None) -> tuple[str, str | None]:
     return s, None
 def rule_hardcoded_url(f: DiffFile, root: Path) -> list[tuple]:
     out = []
-    for ln in f.added:
-        if _looks_commented(ln.text):
+    allowed = _effective_url_allow_hosts()
+    # walk the whole new-side file through _code_only() so comment AND
+    # docstring rows (incl. prose in a file header or a test fixture's
+    # triple-quoted diff text) never fire - only URLs in real code lines
+    # are endpoints baked into code. The file-backed opener seed mirrors
+    # R3/R7/R9/R10. URLs inside normal string literals still fire: that is
+    # the rule's core signal.
+    lines = _new_side_lines(f)
+    in_doc = _docstring_state_before(f, root, lines)
+    for lineno, text, is_added in lines:
+        code, in_doc = _code_only(text, in_doc)
+        if not code.strip() or not is_added:
             continue
-        for m in URL_RE.finditer(ln.text):
+        for m in URL_RE.finditer(code):
             host = m.group(1).lower().rstrip(".")
-            if host in URL_ALLOW_HOSTS:
+            if _host_allowed(host, allowed):
                 continue
             out.append((
-                "LOW", "R6", f.path, ln.lineno,
+                "LOW", "R6", f.path, lineno,
                 f"hardcoded URL '{_display_safe(m.group(0))}' - endpoint baked into code",
                 DEFAULT_SUGGEST[R6_NAME],
             ))
@@ -1581,6 +1631,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="only run these rules (repeatable, comma-separated)")
     ap.add_argument("--exclude", action="append", metavar="GLOB",
                     help="skip files matching a glob (repeatable)")
+    ap.add_argument("--allow-host", action="append", metavar="HOST",
+                    help="extra R6 URL allow-list host (repeatable, comma-separated; "
+                         "subdomains allowed; env AGENT_DIFF_GATE_HOSTS does the same)")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--fail-on", default="high", metavar="SEV",
                     choices=["high", "medium", "low", "none"],
@@ -1673,6 +1726,11 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"unknown rule '{r}' (known: {', '.join(sorted(known))})")
                     return 2
                 rule_filter.add(r)
+
+    if args.allow_host:
+        for chunk in args.allow_host:
+            EXTRA_ALLOW_HOSTS.update(
+                part.strip() for part in chunk.split(",") if part.strip())
 
     fail_on = "none" if args.warn_only else args.fail_on
 
