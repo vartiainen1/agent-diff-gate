@@ -27,6 +27,14 @@ that raises during import or during a scan is skipped with a stderr
 warning — it can never crash the gate, and malformed findings are
 dropped rather than reported.
 
+## Trust
+
+Plugin modules are executed as Python at import time and at scan time. Only
+add rules you trust — they run with the same privileges as the gate itself.
+A broken plugin is skipped with a warning; a malicious one is code execution
+by design. Never run the gate against a repository whose `rules.d/` you did
+not author.
+
 ## Rules
 
 - Files starting with `_` are ignored (this template, helpers).

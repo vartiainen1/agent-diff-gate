@@ -346,6 +346,42 @@ ACTIVE / RECENT ENTRIES
   FIX: tightened TODO_MARKER_RE to the annotation shape (MARKER:/MARKER(/bare-at-EOL with a quote/backtick lookbehind); R11 stays the deliberate exception to the comment-stripping sweep - markers live in comments, so added lines are still scanned raw. Dogfood: 15 -> 2 on full history (both genuine); working-tree self-triggers 10 -> 0 prose.
   STATUS: FIXED.
 
+[2026-08-11] AREA: S1 path containment - diff paths can read outside the repo (arbitrary file read)
+  ERROR: _docstring_state_before (R3/R7/R9/R10 seed) and _existing_names (R5) join root / f.path where f.path comes from the untrusted diff: b/../../etc/passwd, absolute paths (C:/Windows/win.ini), NUL bytes, and symlinks pointing outside let the gate READ arbitrary files
+  CAUSE: no containment check exists between the diff-controlled path and the read_text() calls; only OSError is caught, so a NUL byte would also crash
+  FIX: FIX: new _repo_path(root, rel) containment helper (NUL/absolute/'..'/resolve+is_relative_to checks, symlink escapes refused) used by _docstring_state_before and R5's _existing_names; callers treat None as a missing file. Windows junctions documented as a residual limitation.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: S2 R4 leaks secret values in the duplicate-logic snippet
+  ERROR: rule_duplicate_logic echoes up to 48 chars of the duplicated statement in its message; two identical credential lines (password = sk-...) print the literal secret to the report
+  CAUSE: the R4 message interpolates text[:48] verbatim with no secret masking
+  FIX: FIX: rule_duplicate_logic redacts the snippet (any(_secret_matches(text)) -> '<redacted: contains a credential>') plus _display_safe; verified the R4 message no longer carries sk- values.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: S3 terminal control-char injection in gate output
+  ERROR: diff-derived text reaches the report verbatim: file paths (f.path) and snippets (R4 statement, R6 URL, R9 variable name) can carry ANSI escapes, backspaces, or bidi-override chars (U+202E) and spoof or corrupt the terminal output
+  CAUSE: no display sanitization on diff-controlled text before formatting
+  FIX: FIX: _display_safe() strips C0/DEL/bidi control chars + tabs-to-spaces; applied in _clean_path (paths) and the R4/R6/R9 diff-derived message interpolations.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: S4 unbounded stdin/file read - memory DoS
+  ERROR: --stdin does sys.stdin.read() and --file reads the whole file with no size cap; a CI pipeline or hostile peer feeding a multi-GB diff exhausts memory
+  CAUSE: no MAX_DIFF_BYTES guard on the untrusted input channels
+  FIX: FIX: MAX_DIFF_BYTES = 8 MiB cap with a shared _check_input_cap(label, text) guard on --file and --stdin (exit 2 with a clean message); caps count characters (up to ~4x bytes, still bounded).
+  STATUS: FIXED.
+
+[2026-08-11] AREA: S5 raw traceback leak from the product path
+  ERROR: an unexpected exception in parse_diff/analyze/gate_verdict would dump a raw traceback inside a pre-commit hook
+  CAUSE: main() has no boundary exception guard around the product section
+  FIX: FIX: main() wraps parse/analyze/verdict in try/except Exception -> clean 'GATE: internal error - ...' exit 2 (accepted R10 finding, documented); plugin finding fields coerced to str/int so json.dumps can never raise outside the guard; KeyboardInterrupt/SystemExit pass through.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: S6 trust model undocumented in SECURITY.md
+  ERROR: SECURITY.md does not state that rules.d/ plugins execute arbitrary code at import + scan time, nor that --stdin/--file diffs are untrusted input with containment + size caps
+  CAUSE: security documentation gap for the two trust boundaries (plugins, diff input)
+  FIX: FIX: SECURITY.md gained a Trust model section (plugins execute code, diffs are untrusted, containment + size caps + redaction + sanitize, fully offline); rules.d/README gained a Trust note; junction + chars-cap limitations documented.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

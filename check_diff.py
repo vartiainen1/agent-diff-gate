@@ -63,6 +63,21 @@ HERE = Path(__file__).resolve().parent
 LOG_FILE = "errors.txt"
 RULES_FILE = "rules.txt"
 PLUGIN_DIR = "rules.d"
+MAX_DIFF_BYTES = 8 * 1024 * 1024  # cap on untrusted diff input (S4): the
+# gate runs inside pre-commit hooks / CI and must never OOM on a huge diff
+
+
+def _check_input_cap(label: str, text: str) -> int | None:
+    """Exit code 2 when text exceeds the input cap (S4), else None. One
+    shared implementation so the guard cannot drift between input channels.
+    The cap counts CHARACTERS (each up to 4 UTF-8 bytes - worst case ~4x
+    the byte budget, 32 MiB for the 8 MiB cap): still bounded, so the gate
+    can never be made to exhaust memory."""
+    if len(text) > MAX_DIFF_BYTES:
+        print(f"{label} exceeds {MAX_DIFF_BYTES} chars - "
+              "refusing to analyze (input cap, S4).")
+        return 2
+    return None
 
 # --- severity model --------------------------------------------------------
 SEV_RANK = {"LOW": 1, "MEDIUM": 2, "HIGH": 3}
@@ -124,15 +139,54 @@ class DiffFile:
         return runs
 
 
+CONTROL_RE = re.compile(r"[\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]")
+
+
+def _display_safe(text: str) -> str:
+    """Strip terminal/bidi control characters from diff-derived text so a
+    hostile diff cannot spoof or corrupt the report (ANSI escapes,
+    backspaces, RTL overrides). Tabs become spaces. Kept minimal: only the
+    chars that carry display-side effects (S3)."""
+    return CONTROL_RE.sub("", text.replace("\t", " "))
+
+
+def _repo_path(root: Path, rel: str) -> Path | None:
+    """A diff path resolved safely inside root, or None if it could escape.
+
+    f.path is untrusted input (--stdin/--file/another branch): a '..'
+    segment, an absolute path (drive or root prefix), a NUL byte, or a symlink
+    inside the repo pointing outside must never make the gate READ outside
+    the repo. Callers treat None exactly like a missing file (S1). Residual
+    limitation (documented, not portably fixable): Windows junction points
+    (reparse points) are not followed by Path.resolve(), so a junction
+    inside the repo whose target exists could pass the check - creating a
+    junction needs local privileges, i.e. an attacker who already controls
+    the machine and could just read the file directly."""
+    if not rel or "\x00" in rel:
+        return None
+    try:
+        p = Path(rel)
+        if p.is_absolute() or ".." in p.parts:
+            return None
+        joined = root / p
+        inside = joined.resolve().is_relative_to(root.resolve())
+    except (OSError, ValueError):
+        return None  # unparsable or unresolvable path: treat as unavailable
+    return joined if inside else None
+
+
 def _clean_path(p: str) -> str:
-    """Normalize a diff path: strip a/ b/ prefixes, quotes, and /dev/null."""
+    """Normalize a diff path: strip a/ b/ prefixes, quotes, /dev/null, and
+    terminal/bidi control chars (S3: a hostile path must not corrupt the
+    report)."""
     p = p.strip().strip('"').strip("'")
     if p == "/dev/null":
         return ""
     for pref in ("a/", "b/"):
         if p.startswith(pref):
-            return p[len(pref):]
-    return p
+            p = p[len(pref):]
+            break
+    return _display_safe(p)
 
 
 def parse_diff(text: str) -> list[DiffFile]:
@@ -457,8 +511,8 @@ def _docstring_state_before(f: DiffFile, root: Path,
         return None
     if not lines or lines[0][0] <= 1:
         return None
-    path = root / f.path
-    if not path.is_file():
+    path = _repo_path(root, f.path)
+    if path is None or not path.is_file():
         return None
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -534,10 +588,13 @@ def rule_duplicate_logic(f: DiffFile) -> list[tuple]:
     out = []
     for text, lines in counts.items():
         if len(lines) >= 2:
+            snippet = _display_safe(text[:48])
+            if any(_secret_matches(text)):
+                snippet = "<redacted: contains a credential>"  # S2
             out.append((
                 "MEDIUM", "R4", f.path, lines[0],
                 f"identical statement added {len(lines)}x (copy-paste signal): "
-                f"{text[:48]!r}",
+                f"{snippet!r}",
                 DEFAULT_SUGGEST[R4_NAME],
             ))
     return out
@@ -582,8 +639,10 @@ def rule_ignores_existing(f: DiffFile, root: Path) -> list[tuple]:
         return []
     out = []
     added_lines = {ln.lineno for ln in f.added}
-    # signal 1: names still present on disk (not on added lines)
-    existing = _existing_names(root / f.path, added_lines)
+    # signal 1: names still present on disk (not on added lines). The path
+    # is diff-controlled, so it must pass containment or be skipped (S1).
+    rp = _repo_path(root, f.path)
+    existing = _existing_names(rp, added_lines) if rp is not None else set()
     # signal 2: names in the diff's unchanged context lines (mode-independent;
     # removed lines are excluded: a removed+added pair is a replacement, not
     # a duplicate)
@@ -647,7 +706,7 @@ def rule_hardcoded_url(f: DiffFile) -> list[tuple]:
                 continue
             out.append((
                 "LOW", "R6", f.path, ln.lineno,
-                f"hardcoded URL '{m.group(0)}' - endpoint baked into code",
+                f"hardcoded URL '{_display_safe(m.group(0))}' - endpoint baked into code",
                 DEFAULT_SUGGEST[R6_NAME],
             ))
     return out
@@ -782,7 +841,7 @@ def rule_missing_path_validation(f: DiffFile, root: Path) -> list[tuple]:
         else:
             m = PATH_VAR_ARG_RE.search(code)
             if m and re.search(r"input", m.group(1), re.I):
-                hit = "'" + m.group(1) + "'"
+                hit = "'" + _display_safe(m.group(1)) + "'"
         if hit:
             out.append((
                 "MEDIUM", "R9", f.path, lineno,
@@ -1110,6 +1169,16 @@ def analyze(
                         continue
                     sev, rule, file, line, msg, sugg = res
                     rule = p["id"]  # findings always carry the plugin's id
+                    # coerce every field to a serializable type (S5 review:
+                    # a plugin finding must never make json.dumps raise a raw
+                    # traceback outside the boundary guard)
+                    file = str(file)
+                    try:
+                        line = int(line)
+                    except (TypeError, ValueError):
+                        line = 0
+                    msg = str(msg)
+                    sugg = str(sugg)
                     if sev not in SEV_RANK:
                         sev = p["severity"]  # fall back to the declared default
                     if not sugg:
@@ -1566,14 +1635,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.file:
         try:
-            diff_text = Path(args.file).read_text(encoding="utf-8", errors="replace")
+            with open(args.file, encoding="utf-8", errors="replace") as fh:
+                diff_text = fh.read(MAX_DIFF_BYTES + 1)
         except OSError as exc:
             print(f"--file: cannot read {args.file}: {exc}")
             return 2
+        if _check_input_cap(f"--file: {args.file}", diff_text) is not None:
+            return 2
         source = f"file ({args.file})"
     elif args.stdin:
-        diff_text = sys.stdin.read()
+        diff_text = sys.stdin.read(MAX_DIFF_BYTES + 1)
         source = "stdin"
+        if _check_input_cap("GATE: diff on stdin", diff_text) is not None:
+            return 2
         if not diff_text.strip():
             print("GATE: PASS — empty diff on stdin, nothing to analyze (0 findings).")
             return 0
@@ -1597,20 +1671,29 @@ def main(argv: list[str] | None = None) -> int:
             print("GATE: PASS — no changes to analyze (0 findings).")
             return 0
 
-    files = parse_diff(diff_text)
-    changed = len(files)
-    excluded = 0
-    if args.exclude:
-        excluded = sum(
-            1 for f in files if any(fnmatch.fnmatch(f.path, pat) for pat in args.exclude)
-        )
+    # S5: a gate must never dump a raw traceback inside a pre-commit hook.
+    # The except Exception below is a deliberate boundary handler (an
+    # accepted R10 finding, same class as the tool's other two): an
+    # unexpected failure must become a clean exit, never a traceback.
+    try:
+        files = parse_diff(diff_text)
+        changed = len(files)
+        excluded = 0
+        if args.exclude:
+            excluded = sum(
+                1 for f in files
+                if any(fnmatch.fnmatch(f.path, pat) for pat in args.exclude)
+            )
 
-    findings = analyze(
-        diff_text, root=HERE,
-        rule_filter=rule_filter, excludes=args.exclude, plugins=plugins,
-        max_findings=args.max_findings,
-    )
-    passes, _ = gate_verdict(findings, fail_on)
+        findings = analyze(
+            diff_text, root=HERE,
+            rule_filter=rule_filter, excludes=args.exclude, plugins=plugins,
+            max_findings=args.max_findings,
+        )
+        passes, _ = gate_verdict(findings, fail_on)
+    except Exception as exc:
+        print(f"GATE: internal error - {exc}")
+        return 2
 
     if args.json:
         payload = {

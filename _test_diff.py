@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -2176,6 +2177,160 @@ class TestDogfoodRegression(unittest.TestCase):
             self.assertNotIn("UnicodeDecodeError", out)
             self.assertIn('"source"', out)  # real JSON payload, not a crash
             self.assertEqual(rc, 0)          # clean diff passes the gate
+
+# ===========================================================================
+# security hardening: containment, redaction, display sanitize, input caps
+# ===========================================================================
+class TestSecurityHardening(unittest.TestCase):
+    # --- S1: diff-controlled paths must not read outside the repo ----------
+    def test_repo_path_containment(self):
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        good = cd._repo_path(root, "sub/file.py")
+        self.assertIsNotNone(good)
+        self.assertTrue(str(good.resolve()).startswith(str(root.resolve())))
+        self.assertIsNone(cd._repo_path(root, "../outside.py"))
+        self.assertIsNone(cd._repo_path(root, str(root / ".." / "outside.py")))
+        self.assertIsNone(cd._repo_path(root, "sub/x\x00y.py"))
+        self.assertIsNone(cd._repo_path(root, ""))
+        if os.name == "nt":
+            self.assertIsNone(cd._repo_path(root, "C:/Windows/win.ini"))
+            self.assertIsNone(cd._repo_path(root, "\\\\server\\share\\f"))
+
+    @unittest.skipUnless(hasattr(os, "symlink") and os.name != "nt",
+                         "needs symlinks")
+    def test_repo_path_symlink_escape_rejected(self):
+        base = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, base, ignore_errors=True)
+        root = base / "repo"
+        root.mkdir()
+        secret = base / "secret.txt"
+        secret.write_text("x", encoding="utf-8")
+        try:
+            (root / "link.py").symlink_to(secret)
+        except OSError:
+            return  # no symlink support: nothing to prove
+        self.assertIsNone(cd._repo_path(root, "link.py"))
+
+    def test_r5_does_not_read_outside_repo(self):
+        # S1 integration: a diff naming ../secret.py must not let R5 read it.
+        # The outside file defines victim() - R5 would fire if it were read.
+        base = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, base, ignore_errors=True)
+        root = base / "repo"
+        root.mkdir()
+        (base / "secret.py").write_text("def victim():\n    return 1\n",
+                                        encoding="utf-8")
+        d = """diff --git a/../secret.py b/../secret.py
+--- a/../secret.py
++++ b/../secret.py
+@@ -1 +1,2 @@
+ ok
++def victim():
+"""
+        finds = findings_for(d, "R5", root=root)
+        self.assertEqual([f for f in finds if f.rule == "R5"], [])
+
+    # --- S2: R4 must redact secrets from its snippet ------------------------
+    def test_r4_redacts_secret_in_snippet(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++password = "sk-abcdefghijklmnopqrstuvwxyz123456"
++password = "sk-abcdefghijklmnopqrstuvwxyz123456"
+"""
+        finds = findings_for(d, "R4")
+        r4 = [f for f in finds if f.rule == "R4"]
+        self.assertTrue(r4)
+        self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", r4[0].message)
+        self.assertIn("redacted", r4[0].message)
+
+    # --- S3: terminal/bidi control chars are stripped from report text ------
+    def test_display_safe_strips_control(self):
+        raw = "\x1b[31mred\x1b[0m\t\u202eEND"
+        clean = cd._display_safe(raw)
+        self.assertNotIn("\x1b", clean)
+        self.assertNotIn("\u202e", clean)
+        self.assertNotIn("\t", clean)
+
+    def test_path_control_chars_sanitized_in_report(self):
+        d = """diff --git a/x\x1b[31m.py b/x\x1b[31m.py
+--- a/x\x1b[31m.py
++++ b/x\x1b[31m.py
+@@ -1 +1,2 @@
+ ok
++key = "sk-abcdefghijklmnopqrstuvwxyz123456"
+"""
+        finds = findings_for(d, "R1")
+        self.assertTrue(finds)
+        for f in finds:
+            self.assertNotIn("\x1b", f.file)
+
+    # --- S4: untrusted diff input is size-capped ----------------------------
+    def test_file_input_size_cap(self):
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        p = d / "big.diff"
+        p.write_text("diff --git a/x b/x\n" * 500, encoding="utf-8")
+        with mock.patch.object(cd, "MAX_DIFF_BYTES", 100):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                rc = cd.main(["--file", str(p)])
+        self.assertEqual(rc, 2)
+        self.assertIn("exceeds", out.getvalue())
+
+    def test_stdin_input_size_cap(self):
+        with mock.patch.object(cd, "MAX_DIFF_BYTES", 100), \
+                mock.patch("sys.stdin", io.StringIO("x" * 500)):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                rc = cd.main(["--stdin"])
+        self.assertEqual(rc, 2)
+        self.assertIn("exceeds", out.getvalue())
+
+    # --- S5: the product path never leaks a raw traceback -------------------
+    def test_plugin_bad_field_types_serialize_cleanly(self):
+        # S5 review: a plugin returning non-serializable fields must not
+        # crash json.dumps outside the boundary guard - fields are coerced
+        class _Obj:
+            pass
+
+        def rule_diff(f):
+            o = _Obj()
+            return [("LOW", "P9", o, o, o, o)]
+
+        plugins = {"P9": {"id": "P9", "severity": "LOW",
+                          "suggestion": "fix it", "func": rule_diff,
+                          "file": "bad.py"}}
+        d = """diff --git a/x b/x
+--- a/x
++++ b/x
+@@ -1 +1,2 @@
+ ok
++data = 1
+"""
+        finds = cd.analyze(d, root=Path("."), plugins=plugins, max_findings=0)
+        self.assertTrue(any(f.rule == "P9" for f in finds))
+        payload = {"findings": [f.as_dict() for f in finds]}
+        self.assertIsInstance(json.dumps(payload), str)  # must not raise
+
+    def test_main_internal_error_no_traceback(self):
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        p = d / "ok.diff"
+        p.write_text("diff --git a/x b/x\n--- a/x\n+++ b/x\n"
+                     "@@ -1 +1,2 @@\n ok\n+x = 1\n", encoding="utf-8")
+        with mock.patch.object(cd, "parse_diff",
+                               side_effect=RuntimeError("boom")):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                rc = cd.main(["--file", str(p)])
+        self.assertEqual(rc, 2)
+        self.assertIn("internal error", out.getvalue())
+        self.assertNotIn("Traceback", out.getvalue())
+
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")

@@ -57,8 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 151 tests including process-style
-  output-value integration tests. all 151 should pass.
+- **Tests:** `_test_diff.py` — 161 tests including process-style
+  output-value integration tests. all 161 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 
@@ -123,6 +123,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   fires. R11 stays a **deliberate exception** to the R3/R7/R9/R10
   comment-stripping sweep: marker annotations live in comments and docstrings,
   so this rule still scans added lines raw. Dogfood: 15 findings -> 2 genuine.
+- **Security hardening (S1–S6):** diff-controlled paths can no longer make
+  the gate read outside the repository root (`..`, absolute paths, NUL
+  bytes, escaping symlinks refused); R4 redacts credential values from its
+  duplicate-logic snippet; terminal/bidi control characters are stripped
+  from report text; `--stdin`/`--file` input is size-capped (8 MiB); the
+  product path never leaks a raw traceback (clean `GATE: internal error`,
+  exit 2); SECURITY.md documents the trust model (plugins execute code,
+  diffs are untrusted input).
 ## [0.0.0] — placeholder (never released)
 
 - Repository scaffolding only.
