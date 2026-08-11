@@ -124,3 +124,12 @@ SESSION NOTE (2026-08-11): dogfood - gate scanned its own commit history
   0.2.0 with Finding-set change labels, self-syncing --version test, v0.2.0 tag +
   release published, publish.yml skipped (PUBLISH_TO_PYPI gate). 170 tests, log 62
   FIXED / 0 OPEN.
+- 2026-08-11 dogfood lesson: GitHub squash-merge appends "(#NN)" to the
+  merge-commit title, so the CI commit gate re-running on the merged commit
+  extracted "...AREA: x) (#31" and BLOCKED merges in the sibling family. Fixed
+  in error-log/decision-log/log-ai: _extract_area (and the error-log hook sed)
+  now strip a trailing "(#NN)" group before the punctuation strip, each pinned
+  by a test. Also: a line-continuation backslash can silently break the shell
+  hook on dash (Ubuntu) while passing on Windows Git Bash - sh -n on a mixed
+  CI matrix is the only real check. Gate fix landed as PRs #32/#28/#25; all
+  post-merge CI green.
