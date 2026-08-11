@@ -1617,6 +1617,41 @@ class TestPluginsReview(unittest.TestCase):
         self.assertNotIn("P5", cd.RULE_INFO)  # cleared by the second load
         self.assertIn("P6", cd.RULE_INFO)
 
+
+# ===========================================================================
+# dogfood regression: git integration must survive non-ASCII diffs
+# ===========================================================================
+class TestDogfoodRegression(unittest.TestCase):
+    def test_git_range_unicode_diff_no_crash(self):
+        # regression (dogfood): --range crashed with UnicodeDecodeError on
+        # diffs containing non-ANSI bytes — _run_git decoded git output with
+        # the locale codec (cp1252 on Windows, which has undefined bytes like
+        # 0x8F). U+204F encodes to E2 81 8F in UTF-8, so the diff must
+        # contain the exact byte that used to kill the reader thread.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+
+            def g(*args):
+                return subprocess.run(["git", *args], cwd=repo,
+                                      capture_output=True, text=True,
+                                      encoding="utf-8", errors="replace")
+
+            g("init", "-q")
+            g("config", "user.email", "t@t")
+            g("config", "user.name", "t")
+            (repo / "f.py").write_text("x = 1\n", encoding="utf-8")
+            g("add", ".")
+            g("commit", "-q", "-m", "base")
+            (repo / "f.py").write_text("x = 1\nnote = '\u204f'\n",
+                                       encoding="utf-8")
+            g("add", ".")
+            g("commit", "-q", "-m", "unicode")
+            rc, out = run_tool_in(repo, "--range", "HEAD~1", "HEAD", "--json")
+            self.assertNotIn("Traceback", out)
+            self.assertNotIn("UnicodeDecodeError", out)
+            self.assertIn('"source"', out)  # real JSON payload, not a crash
+            self.assertEqual(rc, 0)          # clean diff passes the gate
+
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])

@@ -17,8 +17,8 @@ SESSION NOTE (2026-08-11): agent-diff-gate v0.1.0 BUILT — first session
 - Dogfooding caught 3 real bugs, all logged in errors.txt before fixing:
   R3 try-scope never reset after except; R5 ignored the diff's own context
   lines in offline mode; R3 reset regex missed typed except handlers.
-- 118 tests green (parser + rules + gate + log tooling + process-style
-  output-value integration). README count 118 verified by the drift guard.
+- 119 tests green (parser + rules + gate + log tooling + process-style
+  output-value integration). README count 119 verified by the drift guard.
 - Kit shipped: README, rules.txt, errors.txt, notes.txt, CHANGELOG,
   AGENTS.md, pyproject.toml, SECURITY, CONTRIBUTING, CoC, LICENSE, hooks/
   installer + commit-msg hook, CI + release + publish workflows, start.py.
@@ -103,3 +103,17 @@ SESSION NOTE (2026-08-11): starter kit + pre-commit diff gate hook
 - Scratch-repo dogfood verified with output values: blocked (rc 1 with the
   real finding), fixed passes (rc 0), empty staged passes, AGENT_DIFF_GATE_OFF
   escape hatch, AGENT_DIFF_GATE_ARGS='--exclude *_test*' works.
+
+================================================================================
+SESSION NOTE (2026-08-11): dogfood - gate scanned its own commit history
+================================================================================
+- Ran the gate over all 9 commits plus root..HEAD. It flags its own test
+  fixtures (fake keys/JWT/URLs -> R1/R12/R6 HIGH in _test_diff.py), its own
+  docs (README/CHANGELOG rule descriptions -> R2/R10/R12/R13/R14 on .md
+  files), and its own module docstring (check_diff.py:341-350). R4 fires
+  heavily on repeated test-fixture lines and log 'STATUS: FIXED.' lines.
+- Real bug found (logged before fixing): --range crashed on non-ASCII diffs
+  (git output decoded with the locale codec; cp1252 has undefined bytes).
+  Fixed with encoding='utf-8' errors='replace' + regression test -> 119.
+- Takeaway: test-heavy repos should run --exclude '*_test*'; docs that
+  describe the rules self-trigger them (expected); R4 on fixtures is noise.

@@ -1024,7 +1024,8 @@ def format_human(findings, source: str, fail_on: str, analyzed: int, changed: in
 def _run_git(args: list[str]) -> tuple[str, str]:
     try:
         proc = subprocess.run(
-            ["git", *args, "--no-color"], capture_output=True, text=True, timeout=60
+            ["git", *args, "--no-color"], capture_output=True, text=True,
+            timeout=60, encoding="utf-8", errors="replace",
         )
     except OSError as exc:
         return "", f"git not available: {exc}"

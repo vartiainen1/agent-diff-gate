@@ -273,6 +273,16 @@ ACTIVE / RECENT ENTRIES
        identical 2-group settings.json
   STATUS: FIXED.
 
+[2026-08-11] AREA: git integration decodes diffs with the locale codec - crashes on non-ASCII (dogfood)
+  ERROR: --range on a commit whose diff contains UTF-8 characters crashed with UnicodeDecodeError ('charmap' codec can't decode byte 0x8f), then main() died with AttributeError on None diff_text - empty stdout, rc 1
+  CAUSE: _run_git calls subprocess.run(..., text=True) without an encoding; on Windows the default is the ANSI codec (cp1252), which has undefined bytes (0x81/0x8D/0x8F/0x90/0x9D) - a UTF-8 diff containing one makes the stdout reader thread die, so proc.stdout is None and main() crashes on .strip()
+  FIX: _run_git now decodes git output as UTF-8 with errors='replace'
+       (encoding + errors kwargs on subprocess.run); the locale codec
+       (cp1252) had undefined bytes (0x8F from U+204F) that killed the
+       stdout reader thread and left proc.stdout=None, crashing main().
+       Regression test: --range over a diff containing U+204F (E2 81 8F).
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 
