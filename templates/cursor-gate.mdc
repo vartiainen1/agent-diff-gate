@@ -1,0 +1,28 @@
+---
+description: Agent Diff Gate — run the quality gate before every commit
+globs: **
+alwaysApply: true
+---
+
+# Quality gate (mandatory)
+
+This project uses **Agent Diff Gate** (`check_diff.py`). Before ANY commit:
+
+1. Run: `python check_diff.py --staged`
+2. If it exits non-zero, fix every finding and re-run until `GATE: PASS`.
+3. Never commit with findings. Never use `git commit --no-verify`.
+
+The gate flags hardcoded secrets, swallowed errors, missing error handling,
+duplicate logic, ignored existing patterns, unsafe execution, SQL injection
+and more — see `python check_diff.py --list-rules`.
+
+## Log before you fix
+
+Found an error? Log it first, then fix:
+
+```sh
+python check_diff.py --add --area "<what broke>" \
+  --error "<symptom>" --cause "<root cause>"
+```
+
+and reference it in the commit message: `fix <thing> (AREA: <what broke>)`.

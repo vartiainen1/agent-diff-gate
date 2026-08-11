@@ -240,6 +240,39 @@ ACTIVE / RECENT ENTRIES
   FIX: dispatch loop skips malformed returns (isinstance + len check), scan-time rule exceptions warn on stderr, RULE_INFO resets plugin entries per load, finding rule ids normalized to the plugin id; 4 regression tests.
   STATUS: FIXED.
 
+[2026-08-11] AREA: starter kit - templates for adopting projects + pre-commit diff gate hook
+  ERROR: adopting projects have no ready-to-copy agent instructions (CLAUDE.md), Claude/Cursor hook configs, or a git pre-commit hook that runs the diff scan - only the log-before-fix commit-msg gate exists
+  CAUSE: the repo ships enforcement for the AREA/log discipline only; the diff scan is invoked by workflow, and no copy-into-any-project kit documents agent integration
+  FIX: templates/ kit shipped (CLAUDE.md, pre-commit-gate.sh, claude-settings.json, cursor-gate.mdc, README); hooks/pre-commit-gate.sh added and registered as --precommit in install.sh (with a per-group idempotent Claude-settings merge); Claude settings gained a GitCommit gate group; docs updated; scratch-repo tested: blocked / pass / empty / escape-hatch / exclude.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: pre-commit gate hook picks the Windows Store python3 stub - clean commits blocked (test-caught)
+  ERROR: the pre-commit hook always blocked commits on Windows: 'python3'
+         resolves to the Microsoft Store app-execution alias, which prints
+         'Python was not found' and exits non-zero, so check_diff.py never
+         ran and even clean diffs were 'blocked'
+  CAUSE: the hook's candidate loop chose python3 first by mere existence
+         (command -v), without probing that the candidate can actually run;
+         the Store stub exists on PATH but cannot execute Python
+  FIX: the hook now probes each candidate with 'python -c "import sys"'
+       (same pattern as install.sh's have_python) and falls back through
+       python3/python/py; verified live in a scratch repo - bad diff
+       blocked with the real finding, clean diff passes
+  STATUS: FIXED.
+
+[2026-08-11] AREA: install.sh --claude merge drops new hook groups once any blocker exists (latent)
+  ERROR: after the Bash --no-verify blocker was installed, re-running
+         ./hooks/install.sh --claude never added the GitCommit gate group - the
+         merge was not idempotent per group
+  CAUSE: the merge helper checked 'does the target already contain any
+         blocker group' and skipped ALL source groups if so; with multiple
+         PreToolUse groups (Bash blocker + GitCommit gate) the second group
+         was silently dropped on re-runs
+  FIX: the merge now dedups per group by canonical JSON key, adding exactly
+       the groups that are missing; verified: two installs produce an
+       identical 2-group settings.json
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

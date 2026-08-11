@@ -103,16 +103,17 @@ cp check_diff.py /path/to/your/repo/
 python /path/to/your/repo/check_diff.py --staged
 ```
 
-**Git hook** (run the gate on every commit):
+**Git hooks** (run the gate on every commit):
 
 ```sh
-# in your repo root, add to .git/hooks/pre-commit:
-#!/bin/sh
-python "$(git rev-parse --show-toplevel)/check_diff.py" --staged --fail-on high
-exit $?
+cp hooks/pre-commit-gate.sh .git/hooks/pre-commit    # blocks commits with findings
+cp hooks/git-commitmsg-hook.sh .git/hooks/commit-msg # log-before-fix AREA gate
+chmod +x .git/hooks/pre-commit .git/hooks/commit-msg
 ```
 
-Or copy `git-commitmsg-hook.sh` from this repo and adapt the checker path.
+`./hooks/install.sh --git` installs both for you. For the full
+copy-into-any-project starter kit (CLAUDE.md, Claude Code hooks, Cursor
+rules), see `templates/README.md`.
 
 ## Rules detail
 

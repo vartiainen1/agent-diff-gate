@@ -5,6 +5,7 @@
 #
 # Installs any combination of:
 #   --git     the log-before-fix commit-msg hook        (.git/hooks/commit-msg)
+#   --precommit  the diff-scan pre-commit gate          (.git/hooks/pre-commit)
 #   --alias   git wrapper that rejects --no-verify      (~/.local/bin + shell rc)
 #   --claude  Claude Code PreToolUse hook               (.claude/settings.json)
 #   --vscode  VS Code agent hooks                       (.github/hooks/)
@@ -54,6 +55,15 @@ install_git() {
     ok "--git: commit-msg gate installed at .git/hooks/commit-msg"
 }
 
+install_precommit() {
+    [ -d "$ROOT/.git" ] || { skip "--precommit: $ROOT is not a git repository (run: git init)"; return 0; }
+    [ -f "$HOOKS/pre-commit-gate.sh" ] || { say "ERR  --precommit: pre-commit-gate.sh not found"; return 1; }
+    mkdir -p "$ROOT/.git/hooks"
+    cp "$HOOKS/pre-commit-gate.sh" "$ROOT/.git/hooks/pre-commit"
+    chmod +x "$ROOT/.git/hooks/pre-commit"
+    ok "--precommit: diff-gate installed at .git/hooks/pre-commit"
+}
+
 install_alias() {
     [ -f "$HOOKS/block-no-verify.sh" ] || { say "ERR  --alias: block-no-verify.sh not found"; return 1; }
     mkdir -p "$ALIAS_BIN"
@@ -94,12 +104,15 @@ entry = json.load(open(source, encoding="utf-8"))
 pre = data.setdefault("hooks", {}).setdefault("PreToolUse", [])
 if not isinstance(pre, list):
     pre = data["hooks"]["PreToolUse"] = []
-def has_blocker(arr):
-    return any("block-no-verify-hook.sh" in json.dumps(x) for x in arr)
+def group_key(g):
+    return json.dumps(g, sort_keys=True)
+existing = {group_key(g) for g in pre}
 added = 0
 for group in entry["hooks"]["PreToolUse"]:
-    if not has_blocker(pre):
+    key = group_key(group)
+    if key not in existing:
         pre.append(group)
+        existing.add(key)
         added += 1
 with open(target, "w", encoding="utf-8", newline="\n") as fh:
     json.dump(data, fh, indent=2)
@@ -133,6 +146,7 @@ status_all() {
     say ""
     say "agent-diff-gate --no-verify blocker status:"
     if [ -x "$ROOT/.git/hooks/commit-msg" ]; then ok "--git   installed (.git/hooks/commit-msg)"; else skip "--git   not installed"; fi
+    if [ -x "$ROOT/.git/hooks/pre-commit" ]; then ok "--precommit installed (.git/hooks/pre-commit)"; else skip "--precommit not installed"; fi
     if [ -x "$ALIAS_BIN/block-no-verify" ]; then ok "--alias wrapper at $ALIAS_BIN/block-no-verify"; else skip "--alias wrapper not installed"; fi
     rc="$(find_rc)"
     if [ -f "$rc" ] && grep -Fqx "$ALIAS_LINE" "$rc"; then ok "--alias active in $rc"; else skip "--alias not in $rc"; fi
@@ -149,6 +163,7 @@ Usage:
 
   (no flags)        install everything (same as --all)
   --git             install the commit-msg log-before-fix gate
+  --precommit       install the pre-commit diff-scan gate
   --alias           install the git wrapper that rejects --no-verify
   --claude          install the Claude Code PreToolUse hook
   --vscode          install the VS Code agent hooks
@@ -174,10 +189,11 @@ rc_=0
 for arg in "$@"; do
     case "$arg" in
         --git)    install_git || rc_=1 ;;
+        --precommit) install_precommit || rc_=1 ;;
         --alias)  install_alias || rc_=1 ;;
         --claude) install_claude || rc_=1 ;;
         --vscode) install_vscode || rc_=1 ;;
-        --all)    install_git || rc_=1; install_alias || rc_=1; install_claude || rc_=1; install_vscode || rc_=1 ;;
+        --all)    install_git || rc_=1; install_precommit || rc_=1; install_alias || rc_=1; install_claude || rc_=1; install_vscode || rc_=1 ;;
         *)        say "unknown option: $arg (see --help)"; rc_=1 ;;
     esac
 done

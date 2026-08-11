@@ -8,6 +8,7 @@ silent, at the layers where agents actually live.
 
 | Layer | What it blocks | Where |
 |-------|---------------|-------|
+| pre-commit gate | findings in the staged diff (`check_diff.py --staged`) | `.git/hooks/pre-commit` |
 | commit-msg gate | unlogged fixes (`AREA:` marker missing / not in errors.txt) | `.git/hooks/commit-msg` |
 | git wrapper | `git commit --no-verify` / `-n` | `~/.local/bin/block-no-verify` + shell rc |
 | Claude Code hook | `--no-verify` Bash tool calls | `.claude/settings.json` (PreToolUse) |
@@ -22,14 +23,21 @@ on master without naming a logged error.
 
 ```sh
 ./hooks/install.sh              # everything
-./hooks/install.sh --git        # just the commit-msg gate
+./hooks/install.sh --git        # both git gates (pre-commit + commit-msg)
 ./hooks/install.sh --status     # what's installed
 ```
 
 Idempotent; existing settings files are backed up before changes.
 
-## Why commit-msg and not pre-commit
+## Why two git hooks
 
-`pre-commit` runs before the commit message exists, so the AREA marker
-cannot be read there. `commit-msg` receives the message file as `$1` and
-can enforce "the error must be logged before the fix lands".
+The two gates land in different hooks because each needs something only it
+can see:
+
+- `pre-commit` runs before the message exists — so the diff scan lives
+  there (`hooks/pre-commit-gate.sh` -> `check_diff.py --staged`): the code
+  must be clean.
+- `commit-msg` receives the message file as `$1` — so the log-before-fix
+  AREA gate lives there: the fix must be logged.
+
+Together: the code is clean, and the error it fixes is logged.
