@@ -118,3 +118,9 @@ SESSION NOTE (2026-08-11): dogfood - gate scanned its own commit history
 - Takeaway: test-heavy repos should run --exclude '*_test*'; docs that
   describe the rules self-trigger them (expected); R4 on fixtures is noise.
 - 2026-08-11 reviewer round 2: --allow-host + AGENT_DIFF_GATE_HOSTS shipped (R6 allow-list, dot-boundary subdomain match, host normalization on read); R6 became docstring-aware (README claim now true); README honesty: 77 KB / 1,820 lines, rules 73% / infra 27%, ~0.4s per 10k diff lines measured; enforcement-layer positioning. Suite 165 -> 170, gate PASS 0 findings on the commit diff.
+- 2026-08-11 reviewer round 3: R6 test-file contract documented (explicit, no hidden
+  heuristic - --exclude/--allow-host are the escape hatches), dogfood proof-point in
+  README, versioning policy VERSIONING.md (finding-set stability), CHANGELOG cut as
+  0.2.0 with Finding-set change labels, self-syncing --version test, v0.2.0 tag +
+  release published, publish.yml skipped (PUBLISH_TO_PYPI gate). 170 tests, log 62
+  FIXED / 0 OPEN.
