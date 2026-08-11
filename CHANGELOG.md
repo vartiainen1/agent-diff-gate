@@ -42,6 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     `unserialize`; XML parsers (XXE).
   - R14 `sql-injection` (HIGH) — SQL built from f-strings, template
     literals, `.format()` or concatenation.
+- **Plugin interface:** external rules in `rules.d/` — a module declares
+  `RULE_ID`/`RULE_NAME`/`SEVERITY`/`DESCRIPTION` (+ optional `SUGGESTION`)
+  and a `rule_diff(f)` function. `--list-rules` lists built-ins + plugins;
+  `--rules-dir PATH` loads from elsewhere. Broken plugins are skipped with
+  a warning — they never crash the gate.
 - **Gate model:** `--fail-on high|medium|low|none`, `--warn-only`,
   `--rule R1,R2`, `--exclude GLOB`, `--max-findings N`, `--json` output.
   Exit codes: 0 pass / 1 findings / 2 usage error.
@@ -52,8 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 108 tests including process-style
-  output-value integration tests. all 108 should pass.
+- **Tests:** `_test_diff.py` — 118 tests including process-style
+  output-value integration tests. all 118 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 

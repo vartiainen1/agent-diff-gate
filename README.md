@@ -28,7 +28,7 @@ Agent Diff Gate is **local, free, offline, and deterministic** — a single
 stdlib Python file you can drop into any repo, with no network and no data
 leaving the machine.
 
-## The fourteen rules
+## The fourteen built-in rules
 
 | Rule | Pattern | Severity |
 |------|---------|----------|
@@ -195,6 +195,23 @@ template literals with `${…}`, `.format()` on a query, or `+` concatenation
 inside an `execute`/`query` call. Parameterized queries (`%s` + param
 tuple, prepared statements) are not flagged.
 
+## Plugin rules (rules.d/)
+
+New rules no longer have to grow `check_diff.py`. Drop a module into
+`rules.d/` declaring `RULE_ID` / `RULE_NAME` / `SEVERITY` / `DESCRIPTION`
+(plus optional `SUGGESTION`) and a `rule_diff(f)` function, and it runs
+alongside the built-ins on every scan. Plugin rules respect `--rule`
+filtering, dedup, `--max-findings` and the severity gate like any built-in.
+A broken plugin is skipped with a warning — it never crashes the gate.
+
+```bash
+python check_diff.py --list-rules              # built-ins + plugins
+python check_diff.py --rules-dir /path/to/dir  # load rules from elsewhere
+```
+
+See `rules.d/_example_rule.py` (working template) and `rules.d/README.md`
+(the plugin contract).
+
 ## Error-log discipline (this repo)
 
 This repo uses the **agent error-log system**: every error encountered is
@@ -204,9 +221,9 @@ Session notes live in `notes.txt`, distilled lessons in `rules.txt`. Run
 
 ## Tests
 
-`python _test_diff.py` — 108 tests covering the diff parser, all fourteen rules
+`python _test_diff.py` — 118 tests covering the diff parser, all fourteen built-in rules + plugins
 (happy + negative + edge), the gate model, the error-log tooling, and
-process-style output-value integration tests. all 108 should pass.
+process-style output-value integration tests. all 118 should pass.
 
 ## Companion tools
 

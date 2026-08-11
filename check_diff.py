@@ -17,6 +17,7 @@ the churn / vulnerability patterns AI-generated code tends to produce:
   R12 hardcoded-config-credentials  connection strings / JWTs with embedded creds (HIGH)
   R13 unsafe-deserialization pickle/yaml.load/unserialize/XML parsers (HIGH/MEDIUM)
   R14 sql-injection         SQL built from f-strings/template literals/concat (HIGH)
+  R15+ plugins             external rules from rules.d/*.py (see --list-rules)
 
 Stdlib only, zero dependencies, works offline. Run from a git repo:
 
@@ -40,6 +41,7 @@ The repo also carries the agent-error-log discipline (log before fixing):
 
 import argparse
 import fnmatch
+import importlib.util
 import json
 import re
 import subprocess
@@ -60,6 +62,7 @@ VERSION = "0.1.0"
 HERE = Path(__file__).resolve().parent
 LOG_FILE = "errors.txt"
 RULES_FILE = "rules.txt"
+PLUGIN_DIR = "rules.d"
 
 # --- severity model --------------------------------------------------------
 SEV_RANK = {"LOW": 1, "MEDIUM": 2, "HIGH": 3}
@@ -330,6 +333,24 @@ DEFAULT_SUGGEST = {
     R12_NAME: "move connection strings / tokens to environment or a secret store",
     R13_NAME: "avoid pickle/yaml.load/unserialize on untrusted data; use yaml.safe_load / json / defusedxml",
     R14_NAME: "use parameterized queries or prepared statements instead of building SQL from strings",
+}
+
+# --- rule registry: id -> metadata (built-ins; load_plugins() extends it) ---
+RULE_INFO: dict[str, dict] = {
+    "R1": {"name": R1_NAME, "severity": "HIGH", "description": "tokens / keys / credentials in added lines", "suggestion": DEFAULT_SUGGEST[R1_NAME]},
+    "R2": {"name": R2_NAME, "severity": "HIGH", "description": "swallowed exceptions (except: pass, empty catch)", "suggestion": DEFAULT_SUGGEST[R2_NAME]},
+    "R3": {"name": R3_NAME, "severity": "MEDIUM", "description": "open()/int()/json.loads() outside try/with (Python)", "suggestion": DEFAULT_SUGGEST[R3_NAME]},
+    "R4": {"name": R4_NAME, "severity": "MEDIUM", "description": "identical statements added repeatedly (copy-paste)", "suggestion": DEFAULT_SUGGEST[R4_NAME]},
+    "R5": {"name": R5_NAME, "severity": "MEDIUM", "description": "redefines a symbol that already exists in the file", "suggestion": DEFAULT_SUGGEST[R5_NAME]},
+    "R6": {"name": R6_NAME, "severity": "LOW", "description": "http(s):// endpoints baked into code", "suggestion": DEFAULT_SUGGEST[R6_NAME]},
+    "R7": {"name": R7_NAME, "severity": "MEDIUM", "description": "int(input(...)) / parseInt(req.query...) raw conversions", "suggestion": DEFAULT_SUGGEST[R7_NAME]},
+    "R8": {"name": R8_NAME, "severity": "MEDIUM", "description": "eval()/exec()/compile()/new Function/shell=True", "suggestion": DEFAULT_SUGGEST[R8_NAME]},
+    "R9": {"name": R9_NAME, "severity": "MEDIUM", "description": "Path()/open() from input/request/argv (Python)", "suggestion": DEFAULT_SUGGEST[R9_NAME]},
+    "R10": {"name": R10_NAME, "severity": "MEDIUM", "description": "except Exception/BaseException catches everything", "suggestion": DEFAULT_SUGGEST[R10_NAME]},
+    "R11": {"name": R11_NAME, "severity": "LOW", "description": "TODO/FIXME/XXX/HACK markers in added lines", "suggestion": DEFAULT_SUGGEST[R11_NAME]},
+    "R12": {"name": R12_NAME, "severity": "HIGH", "description": "connection strings / JWTs with embedded creds", "suggestion": DEFAULT_SUGGEST[R12_NAME]},
+    "R13": {"name": R13_NAME, "severity": "HIGH", "description": "pickle/yaml.load/unserialize/XML parsers", "suggestion": DEFAULT_SUGGEST[R13_NAME]},
+    "R14": {"name": R14_NAME, "severity": "HIGH", "description": "SQL built from f-strings/template literals/concat", "suggestion": DEFAULT_SUGGEST[R14_NAME]},
 }
 
 
@@ -780,6 +801,85 @@ def rule_sql_injection(f: DiffFile) -> list[tuple]:
     return out
 
 # ===========================================================================
+# plugin interface (external rules in rules.d/)
+# ===========================================================================
+def load_plugins(rules_dir: Path | None = None) -> tuple[dict, list[str]]:
+    """Load external rules from rules.d/*.py; return (plugins, warnings).
+
+    A plugin is a plain Python module declaring metadata plus a rule_diff(f)
+    function (see rules.d/_example_rule.py). A broken plugin is skipped with
+    a warning - it never crashes the gate. Plugin ids must not collide with
+    built-in rules or other plugins.
+    """
+    plugins: dict[str, dict] = {}
+    warnings: list[str] = []
+    # clear plugin entries from any previous load in this process - the
+    # registry must reflect only THIS run's plugins (reviewer: ghosts)
+    for rid in list(RULE_INFO):
+        if rid not in RULES:
+            del RULE_INFO[rid]
+    d = rules_dir or HERE / PLUGIN_DIR
+    if not d.is_dir():
+        return plugins, warnings
+    for py in sorted(d.glob("*.py")):
+        if py.name.startswith("_"):
+            continue  # template / helper files are not rules
+        mod_name = f"_diff_gate_plugin_{py.stem}"
+        try:
+            spec = importlib.util.spec_from_file_location(mod_name, py)
+            if spec is None or spec.loader is None:
+                warnings.append(f"{py.name}: cannot load (no spec) - rule skipped")
+                continue
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        except Exception as exc:
+            warnings.append(f"{py.name}: import failed ({exc}) - rule skipped")
+            continue
+        rid = str(getattr(mod, "RULE_ID", "")).strip()
+        name = str(getattr(mod, "RULE_NAME", "")).strip()
+        sev = str(getattr(mod, "SEVERITY", "")).strip().upper()
+        desc = str(getattr(mod, "DESCRIPTION", "")).strip()
+        fn = getattr(mod, "rule_diff", None)
+        if not rid or not name or not desc:
+            warnings.append(f"{py.name}: missing RULE_ID/RULE_NAME/DESCRIPTION - rule skipped")
+            continue
+        if rid in RULES or rid in plugins:
+            warnings.append(f"{py.name}: rule id '{rid}' already exists - rule skipped")
+            continue
+        if sev not in SEVERITIES:
+            warnings.append(f"{py.name}: bad SEVERITY '{sev}' (HIGH/MEDIUM/LOW) - rule skipped")
+            continue
+        if not callable(fn):
+            warnings.append(f"{py.name}: no rule_diff(f) function - rule skipped")
+            continue
+        plugins[rid] = {
+            "id": rid, "name": name, "severity": sev, "description": desc,
+            "suggestion": (str(getattr(mod, "SUGGESTION", "")).strip()
+                           or DEFAULT_SUGGEST.get(name, "")),
+            "func": fn, "file": py.name,
+        }
+        RULE_INFO[rid] = {"name": name, "severity": sev, "description": desc,
+                          "suggestion": plugins[rid]["suggestion"]}
+    return plugins, warnings
+
+
+def print_rule_list(plugins: dict) -> None:
+    """--list-rules: print every rule (built-in + plugin) with metadata."""
+
+    def key(rid: str) -> tuple:
+        tail = rid[1:]
+        return (rid[:1].lower(), int(tail) if tail.isdigit() else 0, rid)
+
+    for rid in sorted(RULE_INFO, key=key):
+        info = RULE_INFO[rid]
+        origin = "plugin" if rid in plugins else "builtin"
+        print(f"{rid:>4}  {info['severity']:<6} {info['name']:<28} "
+              f"[{origin}] {info['description']}")
+    print(f"({len(RULE_INFO)} rule(s): {len(RULES)} built-in, "
+          f"{len(plugins)} plugin(s))")
+
+
+# ===========================================================================
 # analysis + output
 # ===========================================================================
 class Finding:
@@ -796,7 +896,7 @@ class Finding:
     def as_dict(self):
         return {
             "rule": self.rule,
-            "name": RULES.get(self.rule, self.rule),
+            "name": RULE_INFO.get(self.rule, {}).get("name", self.rule),
             "severity": self.severity,
             "file": self.file,
             "line": self.line,
@@ -811,9 +911,12 @@ def analyze(
     root: Path,
     rule_filter: set[str] | None = None,
     excludes: list[str] | None = None,
+    plugins: dict | None = None,
     max_findings: int = 100,
 ) -> list[Finding]:
-    """Run all enabled rules over the diff; return capped, deduped findings."""
+    """Run all enabled rules (built-in + plugin) over the diff; return
+    capped, deduped findings. A broken external rule is skipped with a
+    stderr warning, never allowed to crash the gate."""
     files = parse_diff(diff_text)
     findings: list[Finding] = []
     seen: set[tuple] = set()
@@ -856,6 +959,27 @@ def analyze(
             add(sev, rule, file, line, msg, sugg)
         for sev, rule, file, line, msg, sugg in rule_sql_injection(f):
             add(sev, rule, file, line, msg, sugg)
+        if plugins:
+            for p in plugins.values():
+                try:
+                    results = p["func"](f) or ()
+                except Exception as exc:
+                    # scan-time errors warn - a dead plugin must not be silent
+                    print(f"warning: plugin rule '{p['id']}' ({p['file']}) "
+                          f"raised {exc} - rule skipped", file=sys.stderr)
+                    continue
+                for res in results:
+                    # malformed findings are skipped, never phantom: a bare
+                    # string would unpack into garbage fields (reviewer)
+                    if not isinstance(res, (tuple, list)) or len(res) != 6:
+                        continue
+                    sev, rule, file, line, msg, sugg = res
+                    rule = p["id"]  # findings always carry the plugin's id
+                    if sev not in SEV_RANK:
+                        sev = p["severity"]  # fall back to the declared default
+                    if not sugg:
+                        sugg = p["suggestion"]
+                    add(sev, rule, file, line, msg, sugg)
 
     return findings[:max_findings] if max_findings > 0 else findings
 
@@ -883,7 +1007,7 @@ def format_human(findings, source: str, fail_on: str, analyzed: int, changed: in
     ]
     for f in findings:
         lines.append("")
-        lines.append(f"[{f.severity}] {f.rule} {RULES.get(f.rule, '')}  {f.file}:{f.line}")
+        lines.append(f"[{f.severity}] {f.rule} {RULE_INFO.get(f.rule, {}).get('name', '')}  {f.file}:{f.line}")
         lines.append(f"  {f.message}")
         lines.append(f"  suggestion: {f.suggestion}")
     passes, _ = gate_verdict(findings, fail_on)
@@ -1217,6 +1341,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="report findings but never fail the gate (--fail-on none)")
     ap.add_argument("--max-findings", type=int, default=100,
                     help="cap the number of findings (default 100; 0 = unlimited)")
+    ap.add_argument("--rules-dir", metavar="PATH",
+                    help="load plugin rules from PATH instead of the default rules.d/")
+    ap.add_argument("--list-rules", action="store_true",
+                    help="list all built-in and plugin rules, then exit")
     ap.add_argument("--version", action="store_true", help="print version and exit")
 
     log = ap.add_argument_group("error-log tooling (log before fixing)")
@@ -1249,6 +1377,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"check_diff.py {VERSION}")
         return 0
 
+    if args.list_rules:
+        plugins, warnings = load_plugins(
+            Path(args.rules_dir) if args.rules_dir else None)
+        for w in warnings:
+            print(f"warning: {w}", file=sys.stderr)
+        print_rule_list(plugins)
+        return 0
+
     log_path = Path(args.logfile) if args.logfile else HERE / LOG_FILE
 
     if args.add:
@@ -1273,14 +1409,20 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_log(HERE / args.log if not Path(args.log).is_absolute() else Path(args.log))
 
     # --- the product: diff analysis -------------------------------------
+    plugins, plugin_warnings = load_plugins(
+        Path(args.rules_dir) if args.rules_dir else None)
+    for w in plugin_warnings:
+        print(f"warning: {w}", file=sys.stderr)
+
     rule_filter: set[str] | None = None
     if args.rule:
         rule_filter = set()
+        known = set(RULES) | set(plugins)
         for chunk in args.rule:
             for r in chunk.split(","):
                 r = r.strip().upper()
-                if r not in RULES:
-                    print(f"unknown rule '{r}' (known: {', '.join(RULES)})")
+                if r not in known:
+                    print(f"unknown rule '{r}' (known: {', '.join(sorted(known))})")
                     return 2
                 rule_filter.add(r)
 
@@ -1329,7 +1471,7 @@ def main(argv: list[str] | None = None) -> int:
 
     findings = analyze(
         diff_text, root=HERE,
-        rule_filter=rule_filter, excludes=args.exclude,
+        rule_filter=rule_filter, excludes=args.exclude, plugins=plugins,
         max_findings=args.max_findings,
     )
     passes, _ = gate_verdict(findings, fail_on)
@@ -1344,6 +1486,7 @@ def main(argv: list[str] | None = None) -> int:
             "findings": [f.as_dict() for f in findings],
             "gate": "PASS" if passes else "FAIL",
             "fail_on": fail_on,
+            "plugins": sorted(plugins),
             "exit": 0 if passes else 1,
         }
         print(json.dumps(payload, indent=2))

@@ -17,8 +17,8 @@ SESSION NOTE (2026-08-11): agent-diff-gate v0.1.0 BUILT — first session
 - Dogfooding caught 3 real bugs, all logged in errors.txt before fixing:
   R3 try-scope never reset after except; R5 ignored the diff's own context
   lines in offline mode; R3 reset regex missed typed except handlers.
-- 108 tests green (parser + rules + gate + log tooling + process-style
-  output-value integration). README count 108 verified by the drift guard.
+- 118 tests green (parser + rules + gate + log tooling + process-style
+  output-value integration). README count 118 verified by the drift guard.
 - Kit shipped: README, rules.txt, errors.txt, notes.txt, CHANGELOG,
   AGENTS.md, pyproject.toml, SECURITY, CONTRIBUTING, CoC, LICENSE, hooks/
   installer + commit-msg hook, CI + release + publish workflows, start.py.
@@ -59,3 +59,28 @@ SESSION NOTE (2026-08-11): R6-R8 added - three new rules
   try-scope reset on '} catch', R8 multi-line shell=True + def-not-flagged,
   R6 message slice cleanup. Dogfood verified against a real repo: --range,
   --staged and the default-gate severity interplay.
+
+================================================================================
+SESSION NOTE (2026-08-11): plugin interface - rules.d external rules
+================================================================================
+- Round 5 (user request): plugin interface. New rules no longer grow
+  check_diff.py - external modules in rules.d/ declare RULE_ID, RULE_NAME,
+  SEVERITY, DESCRIPTION (+ optional SUGGESTION) and a rule_diff(f) function.
+  Underscore-prefixed files are templates, never rules.
+- --list-rules lists built-ins + plugins (RULE_INFO merged registry);
+  --rules-dir PATH overrides the default rules.d/ location. Plugin findings
+  respect --rule filtering, dedup, --max-findings and the severity gate.
+  Severity/suggestion/rule-id normalization per the contract; broken plugins
+  (import or scan errors) warn on stderr and are skipped - never crash the
+  gate.
+- 10 new tests (6 feature + 4 review-regression) -> 118 green. Counts synced
+  in README/CHANGELOG/CONTRIBUTING/AGENTS/notes/rules; drift guard OK.
+- Review round (logged before fixing): malformed plugin returns (bare
+  strings) could unpack into phantom findings - now skipped; scan-time rule
+  exceptions are silent no longer (stderr warning); RULE_INFO cleared stale
+  plugin entries across loads; finding rule ids normalized to the plugin id.
+  My own test-scaffolding bug (orphaned indent under the raise) was caught by
+  the loader warning - fixed the test, the loader was right.
+- rules.d/ ships: README.md (contract) + _example_rule.py (template).
+  Dogfood verified live: --list-rules, --staged, --range + gate interplay,
+  broken-plugin warning on stderr.

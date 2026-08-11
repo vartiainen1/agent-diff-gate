@@ -44,9 +44,10 @@ Reading order:
 - The product is `check_diff.py` — the diff gate. It also carries the
   error-log tooling (--add / --has-entry / --check-commit / --archive-days /
   --lessons / --log), mirroring the agent-error-log family.
-- The fourteen rules (R1-R14) must never produce false positives on clean code:
+- The fourteen built-in rules (R1-R14) and every rules.d/ plugin must never
+  produce false positives on clean code:
   every rule change needs a test, both positive and negative.
-- Validate my changes: run `python _test_diff.py` (all 108 should pass),
+- Validate my changes: run `python _test_diff.py` (all 118 should pass),
   `python check_diff.py --log` (log healthy), and compile-check the touched
   scripts. Verify OUTPUT VALUES, not just exit codes.
 

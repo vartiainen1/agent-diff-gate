@@ -5,8 +5,11 @@ gate exit-code model, the error-log tooling, and process-style output-value
 integration tests (rule: verify OUTPUT VALUES, not just exit codes).
 """
 
+import contextlib
+import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1411,6 +1414,208 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("log healthy", out)
 
+
+
+# ===========================================================================
+# plugin interface (rules.d/)
+# ===========================================================================
+PLUGIN_SRC = '''RULE_ID = "R15"
+RULE_NAME = "demo-plugin"
+SEVERITY = "MEDIUM"
+DESCRIPTION = "flags added lines that call demo()"
+SUGGESTION = "remove the demo() call"
+
+def rule_diff(f):
+    out = []
+    for ln in f.added:
+        if "demo()" in ln.text:
+            out.append((SEVERITY, RULE_ID, f.path, ln.lineno,
+                        "demo() called in an added line", SUGGESTION))
+    return out
+'''
+
+PLUGIN_DIFF = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++demo()
++x = 1
+"""
+
+
+_PLUGIN_TMP_DIRS: set = set()
+
+
+def _write_plugin_dir(files):
+    """Write {name: content} into a fresh temp dir; return its path.
+    Dirs are tracked so the TestPlugins tearDowns can remove them
+    (reviewer: mkdtemp leaked a directory per test)."""
+    tmp = tempfile.mkdtemp()
+    _PLUGIN_TMP_DIRS.add(tmp)
+    for name, content in files.items():
+        Path(tmp, name).write_text(content, encoding="utf-8")
+    return tmp
+
+
+class TestPlugins(unittest.TestCase):
+    def tearDown(self):
+        while _PLUGIN_TMP_DIRS:
+            shutil.rmtree(_PLUGIN_TMP_DIRS.pop(), ignore_errors=True)
+
+    # --- load + fire through analyze() --------------------------------
+    def test_plugin_load_and_fire(self):
+        tmp = _write_plugin_dir({"demo_rule.py": PLUGIN_SRC})
+        plugins, warnings = cd.load_plugins(Path(tmp))
+        self.assertEqual(warnings, [])
+        self.assertEqual(set(plugins), {"R15"})
+        self.assertEqual(plugins["R15"]["name"], "demo-plugin")
+        self.assertEqual(cd.RULE_INFO["R15"]["name"], "demo-plugin")
+        finds = cd.analyze(PLUGIN_DIFF, root=HERE, plugins=plugins, max_findings=0)
+        hits = [f for f in finds if f.rule == "R15"]
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0].severity, "MEDIUM")
+        self.assertEqual(hits[0].line, 2)
+        self.assertIn("demo()", hits[0].message)
+        # without plugins the same diff is clean
+        bare = cd.analyze(PLUGIN_DIFF, root=HERE, max_findings=0)
+        self.assertEqual([f for f in bare if f.rule == "R15"], [])
+
+    # --- underscore files are templates, never rules -------------------
+    def test_plugin_skips_underscore_files(self):
+        tmp = _write_plugin_dir({
+            "_template.py": PLUGIN_SRC.replace("R15", "R99"),
+            "real_rule.py": PLUGIN_SRC.replace("R15", "R16"),
+        })
+        plugins, warnings = cd.load_plugins(Path(tmp))
+        self.assertEqual(warnings, [])
+        self.assertEqual(set(plugins), {"R16"})
+
+    # --- broken plugins warn and are skipped, never crash --------------
+    def test_plugin_missing_metadata_warns(self):
+        tmp = _write_plugin_dir({"broken_rule.py": "SEVERITY = 'LOW'\n"})
+        plugins, warnings = cd.load_plugins(Path(tmp))
+        self.assertEqual(plugins, {})
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("missing RULE_ID", warnings[0])
+        # an import-time crash is also a warning, not a crash
+        tmp2 = _write_plugin_dir({"boom_rule.py": "raise RuntimeError('boom')\n"})
+        plugins2, warnings2 = cd.load_plugins(Path(tmp2))
+        self.assertEqual(plugins2, {})
+        self.assertIn("import failed", warnings2[0])
+
+    # --- bad SEVERITY metadata is rejected -----------------------------
+    def test_plugin_bad_severity_warns(self):
+        tmp = _write_plugin_dir({"sev_rule.py": PLUGIN_SRC.replace("MEDIUM", "URGENT")})
+        plugins, warnings = cd.load_plugins(Path(tmp))
+        self.assertEqual(plugins, {})
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("bad SEVERITY", warnings[0])
+
+    # --- bad finding tuples fall back, never crash ---------------------
+    def test_plugin_bad_finding_tuple_falls_back(self):
+        src = (PLUGIN_SRC
+               .replace("R15", "R17")
+               .replace("(SEVERITY, RULE_ID, f.path", '("URGENT", RULE_ID, f.path')
+               .replace('"demo() called in an added line", SUGGESTION))',
+                        '"demo() called in an added line", ""))'))
+        tmp = _write_plugin_dir({"demo_rule.py": src})
+        plugins, warnings = cd.load_plugins(Path(tmp))
+        self.assertEqual(warnings, [])
+        finds = cd.analyze(PLUGIN_DIFF, root=HERE, plugins=plugins, max_findings=0)
+        hits = [f for f in finds if f.rule == "R17"]
+        self.assertEqual(len(hits), 1)
+        # severity 'URGENT' is not valid -> falls back to the module default
+        self.assertEqual(hits[0].severity, "MEDIUM")
+        # empty suggestion -> falls back to the module SUGGESTION
+        self.assertEqual(hits[0].suggestion, "remove the demo() call")
+
+    # --- the real CLI: --list-rules and --rules-dir --------------------
+    def test_plugin_list_rules_cli(self):
+        tmp = _write_plugin_dir({
+            "cli_rule.py": (PLUGIN_SRC
+                            .replace("R15", "R18")
+                            .replace("demo-plugin", "cli-plugin")),
+            "_hidden.py": PLUGIN_SRC.replace("R15", "R99"),
+        })
+        rc, out = run_tool("--list-rules", "--rules-dir", tmp)
+        self.assertEqual(rc, 0)
+        self.assertIn("R14", out)          # built-ins listed
+        self.assertIn("R18", out)          # plugin listed
+        self.assertIn("cli-plugin", out)
+        self.assertIn("built-in", out)
+        self.assertNotIn("R99", out)       # underscore files skipped
+        # the plugin fires through the real CLI and respects --rule/--fail-on
+        rc2, out2 = run_tool("--stdin", "--rules-dir", tmp, "--rule", "R18",
+                             "--fail-on", "medium", "--json", stdin=PLUGIN_DIFF)
+        self.assertEqual(rc2, 1)
+        payload = json.loads(out2)
+        self.assertEqual(payload["gate"], "FAIL")
+        self.assertEqual({f["rule"] for f in payload["findings"]}, {"R18"})
+        self.assertEqual(payload["plugins"], ["R18"])
+        self.assertEqual(payload["findings"][0]["name"], "cli-plugin")
+
+
+# ===========================================================================
+# plugin interface - reviewer round (malformed returns, scan errors, ghosts)
+# ===========================================================================
+class TestPluginsReview(unittest.TestCase):
+    def tearDown(self):
+        while _PLUGIN_TMP_DIRS:
+            shutil.rmtree(_PLUGIN_TMP_DIRS.pop(), ignore_errors=True)
+
+    def test_plugin_malformed_return_skipped(self):
+        # a plugin returning a bare string must not produce a phantom finding
+        src = PLUGIN_SRC.replace("R15", "P2").replace(
+            '''            out.append((SEVERITY, RULE_ID, f.path, ln.lineno,
+                        "demo() called in an added line", SUGGESTION))
+    return out''',
+            '''            return "hello!"''')
+        tmp = _write_plugin_dir({"bad_rule.py": src})
+        plugins, warnings = cd.load_plugins(Path(tmp))
+        self.assertEqual(warnings, [])
+        finds = cd.analyze(PLUGIN_DIFF, root=HERE, plugins=plugins, max_findings=0)
+        self.assertEqual([f for f in finds if f.rule == "P2"], [])
+
+    def test_plugin_scan_exception_warns(self):
+        # a rule that raises mid-scan is skipped WITH a stderr warning
+        src = PLUGIN_SRC.replace("R15", "P3").replace(
+            '''        if "demo()" in ln.text:
+            out.append((SEVERITY, RULE_ID, f.path, ln.lineno,
+                        "demo() called in an added line", SUGGESTION))
+    return out''',
+            '''        raise RuntimeError("scan boom")''')
+        tmp = _write_plugin_dir({"scan_boom.py": src})
+        plugins, _ = cd.load_plugins(Path(tmp))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            finds = cd.analyze(PLUGIN_DIFF, root=HERE, plugins=plugins,
+                               max_findings=0)
+        self.assertEqual([f for f in finds if f.rule == "P3"], [])
+        self.assertIn("scan boom", err.getvalue())
+        self.assertIn("scan_boom.py", err.getvalue())
+
+    def test_plugin_foreign_rule_id_normalized(self):
+        # a finding tuple with a wrong rule id is normalized to the plugin id
+        src = PLUGIN_SRC.replace("R15", "P4").replace(
+            "(SEVERITY, RULE_ID, f.path", '("HIGH", "R1", f.path')
+        tmp = _write_plugin_dir({"typo_rule.py": src})
+        plugins, _ = cd.load_plugins(Path(tmp))
+        finds = cd.analyze(PLUGIN_DIFF, root=HERE, plugins=plugins, max_findings=0)
+        hits = [f for f in finds if f.rule == "P4"]
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0].severity, "HIGH")  # valid severity kept
+        self.assertEqual(hits[0].as_dict()["name"], "demo-plugin")
+
+    def test_plugin_rule_info_resets_between_loads(self):
+        # RULE_INFO must not keep ghost plugin entries across load_plugins
+        tmp1 = _write_plugin_dir({"a_rule.py": PLUGIN_SRC.replace("R15", "P5")})
+        cd.load_plugins(Path(tmp1))
+        self.assertIn("P5", cd.RULE_INFO)
+        tmp2 = _write_plugin_dir({"b_rule.py": PLUGIN_SRC.replace("R15", "P6")})
+        cd.load_plugins(Path(tmp2))
+        self.assertNotIn("P5", cd.RULE_INFO)  # cleared by the second load
+        self.assertIn("P6", cd.RULE_INFO)
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
