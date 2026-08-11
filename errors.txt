@@ -486,6 +486,16 @@ ACTIVE / RECENT ENTRIES
        Count: 170 tests (unchanged - the version test was modified, not added).
   STATUS: FIXED.
 
+[2026-08-11] AREA: dogfood ledger - full-history gate scan documented in README (family evidence trail)
+  ERROR: the README had no visible evidence trail that the gate reviews its own codebase
+  CAUSE: the reputation strategy needs the dogfood proof visible per repo; the ledger records the real scan results (194 findings, all classified, none suppressed)
+  FIX: README gained the Dogfood ledger section - the gate's full-history scan of its own
+       codebase (194 findings across 16 files), every finding classified (R4 fixture
+       duplication, rule-documentation self-triggers, positive-test fixtures, one
+       deliberate boundary handler), none suppressed. Sibling repos (error-log,
+       decision-log, log-ai) gained the same ledger via PRs, each logged in its own log.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

@@ -408,3 +408,38 @@ cross-project memory, pair it with the siblings:
 - **Changes:** [`CHANGELOG.md`](CHANGELOG.md) (Keep a Changelog / SemVer).
 - **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - **Security:** [`SECURITY.md`](SECURITY.md).
+
+## Dogfood ledger
+
+This repo is reviewed by its own family gate. **agent-diff-gate** was run
+over this repo's entire history (initial commit → `HEAD`):
+
+| | |
+|---|---|
+| Commits scanned | 39 (~5,600 diff lines) |
+| Findings | **194** — 36 HIGH · 151 MEDIUM · 7 LOW |
+| Classes | R4 ×103 · R8 ×20 · R13 ×13 · R10 ×12 · R2 ×10 · R3 ×9 · R14 ×7 · R11 ×7 · R1 ×4 · R12 ×4 · R5 ×4 · R7 ×1 |
+| Suppressed | **none** — every finding is fixed, tracked in `errors.txt`, or documented here |
+
+The commit-level ledger (the round that added `--allow-host`: **15 findings,
+all fixed or documented, none suppressed**) is in [Why this exists](#why-this-exists).
+This table is the cumulative full-history view:
+
+- **R4 (MEDIUM, dominant)** — the documented test-fixture and log-boilerplate
+  duplication class.
+- **R8 / R12 / R13 / R14** — mostly the docs self-trigger class
+  (README/CHANGELOG rows that describe these rules' own patterns — the class
+  the round-2/3 sweeps fixed for R10/R11) plus the rules' own positive-test
+  fixtures.
+- **R1 (HIGH) ×4** — the rule's own test fixtures carrying credential-shaped
+  data.
+- **R2 (HIGH) ×10** — one deliberate boundary handler (`check_diff.py`,
+  documented in its code comment) plus docs/fixture rows.
+- No production-code vulnerability was found. Nothing is suppressed.
+
+Reproduce from this repo:
+
+```sh
+git diff $(git rev-list --max-parents=0 HEAD) HEAD \
+  | python <path-to>/agent-diff-gate/check_diff.py --stdin --json
+```
