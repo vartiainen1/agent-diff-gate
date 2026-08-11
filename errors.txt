@@ -442,6 +442,12 @@ ACTIVE / RECENT ENTRIES
   FIX: templates/adoption-guide.md written (blog-style walkthrough: 60-second try, git hooks, Claude Code hook + block-no-verify, Cursor rule, log-before-fix discipline, what changes after a week, env config, fail-closed note) and linked from the main README.
   STATUS: FIXED.
 
+[2026-08-11] AREA: README demo visual - real-output ASCII block + animated GIF (assets/demo.gif)
+  ERROR: README has only a hand-written example output block; adopters do not see the tool actually running, and there is no visual demo
+  CAUSE: a live demo needs a real captured scan plus (optionally) an animated render; neither existed yet
+  FIX: README gained a Live demo section with assets/demo.gif (animated, rendered from REAL captured output of a scan hitting R1/R2/R3/R7/R14) and the hand-written example output was replaced with that real output; gate handles binary diffs gracefully.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

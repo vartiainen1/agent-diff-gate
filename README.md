@@ -16,6 +16,14 @@ leaves your machine.
 
 ---
 
+## Live demo
+
+![Agent Diff Gate in action — a real scan catching a leaked API key, swallowed exceptions, and a SQL-injection risk](assets/demo.gif)
+
+The animation is **real output**: `check_diff.py` scanning a tiny demo repo that repeats three classic AI-agent mistakes. Run it on your own diff in [Quick start](#quick-start).
+
+---
+
 ## Why this exists
 
 CodeRabbit, Greptile and Qodo review PRs *after* they are pushed — and they
@@ -131,19 +139,41 @@ threshold · `2` usage / environment error.
 
 ### Example output
 
+Actual output from scanning a demo repo that repeats three classic
+AI-agent mistakes (a leaked API key, swallowed exceptions, SQL built from
+strings):
+
 ```text
 === AGENT DIFF GATE — scan report ===
-source   : git diff (staged)
-files    : 3 changed, 3 analyzed
-findings : 9 (4 HIGH, 5 MEDIUM)
+source   : git diff HEAD~1 HEAD
+files    : 1 changed, 1 analyzed
+findings : 6 (3 HIGH, 3 MEDIUM)
 
-[HIGH] R1 hardcoded-secrets  src/auth.py:12
+[HIGH] R1 hardcoded-secrets  app.py:11
   API key (sk-...) in an added line
-  suggestion: load secrets from environment / a secret store; never commit tokens
+  suggestion: found API key (sk-...); load secrets from environment / a secret store; never commit tokens
 
-...
+[MEDIUM] R2 silent-failure  app.py:15
+  bare except catches every exception type
+  suggestion: catch specific exceptions (ValueError, OSError, ...) explicitly
 
-GATE: FAIL — fail-on 'high', 9 finding(s)
+[HIGH] R2 silent-failure  app.py:16
+  exception handler whose only body is pass/continue
+  suggestion: let the error surface (log + re-raise) or handle it; do not swallow it
+
+[MEDIUM] R3 missing-error-handling  app.py:18
+  int()/float() on a variable without a guard — ValueError risk
+  suggestion: validate the input or wrap in try/except ValueError
+
+[MEDIUM] R7 missing-input-validation  app.py:18
+  int()/float() applied directly to input() - unvalidated user input can raise ValueError
+  suggestion: validate the input first and handle conversion errors (try/except ValueError, Number.isNaN)
+
+[HIGH] R14 sql-injection  app.py:9
+  string concatenation inside an SQL call - injection risk
+  suggestion: use parameterized queries or prepared statements instead of building SQL from strings
+
+GATE: FAIL — fail-on 'high', 6 finding(s)
 ```
 
 With `--json`, the same scan is one document:
