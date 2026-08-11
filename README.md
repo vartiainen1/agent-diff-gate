@@ -450,18 +450,24 @@ diff-gate --help
   against the file's folder.
 - The console script is `diff-gate`; the module is `check_diff`.
 
-## License
-
-MIT — see [`LICENSE`](LICENSE).
 
 ## Dogfood ledger
 
-This repo is reviewed by its own family gate. **agent-diff-gate** was run
-over this repo's entire history (initial commit → `HEAD`):
+This repo is reviewed by its own family gate — **agent-diff-gate**, a
+pre-commit diff analyzer that flags risky patterns in added code. The
+ledger below is the gate's output over this repo's entire history
+(initial commit → `HEAD`), recorded so the tool's claims are backed by
+its own findings.
+
+The gate numbers its rules R1–R14 — full definitions are in
+[The fourteen built-in rules](#the-fourteen-built-in-rules). Every
+class this repo's own history triggers is listed below (everything
+except R6 and R9).
+
 
 | | |
 |---|---|
-| Commits scanned | 44 (~5,700 diff lines) |
+| Commits scanned | 45 (~5,700 diff lines) |
 | Findings | **194** — 36 HIGH · 151 MEDIUM · 7 LOW |
 | Classes | R4 ×103 · R8 ×20 · R13 ×13 · R10 ×12 · R2 ×10 · R3 ×9 · R14 ×7 · R11 ×7 · R1 ×4 · R12 ×4 · R5 ×4 · R7 ×1 |
 | Suppressed | **none** — every finding is fixed, tracked in `errors.txt`, or documented here |
@@ -488,3 +494,7 @@ Reproduce from this repo:
 git diff $(git rev-list --max-parents=0 HEAD) HEAD \
   | python <path-to>/agent-diff-gate/check_diff.py --stdin --json
 ```
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
