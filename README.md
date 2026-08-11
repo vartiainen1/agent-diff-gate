@@ -167,7 +167,7 @@ chmod +x .git/hooks/pre-commit .git/hooks/commit-msg
 `./hooks/install.sh --git` installs both for you.
 
 **Claude Code / Cursor starter kit** — the repo ships a copy-into-any-project
-kit in `templates/` (see `templates/README.md`):
+kit in `templates/` (see `templates/README.md`, or start with the blog-style walkthrough in [`templates/adoption-guide.md`](templates/adoption-guide.md)):
 
 | Piece | Copy to | Purpose |
 |---|---|---|

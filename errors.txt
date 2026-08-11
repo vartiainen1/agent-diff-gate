@@ -436,6 +436,12 @@ ACTIVE / RECENT ENTRIES
   FIX: img.shields.io + shields.io added to URL_ALLOW_HOSTS (R6) with pinning test test_r6_badge_hosts_ok (164 -> 165 tests, all docs synced); README badge row now shows CI + License MIT + Python 3.9+ + Release + Dependencies: zero.
   STATUS: FIXED.
 
+[2026-08-11] AREA: adoption guide - blog-style How to adopt in your repo (templates/adoption-guide.md)
+  ERROR: the templates kit had a map (templates/README.md) but no narrative walkthrough, so new adopters had to piece together the steps from a table
+  CAUSE: the kit grew as a copy-paste reference; a human-friendly adoption story was missing
+  FIX: templates/adoption-guide.md written (blog-style walkthrough: 60-second try, git hooks, Claude Code hook + block-no-verify, Cursor rule, log-before-fix discipline, what changes after a week, env config, fail-closed note) and linked from the main README.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 
