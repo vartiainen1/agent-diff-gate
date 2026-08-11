@@ -400,6 +400,12 @@ ACTIVE / RECENT ENTRIES
   FIX: added 'from __future__ import annotations' (PEP 563) to check_diff.py - all 10 PEP 604 union annotations are now evaluated lazily, so the module imports cleanly on Python 3.9 (verified by the CI matrix on re-push).
   STATUS: FIXED.
 
+[2026-08-11] AREA: CI re-run: py 3.9 still fails - Path.write_text(newline=...) is Python 3.10+ only
+  ERROR: TypeError: write_text() got an unexpected keyword argument 'newline' at check_diff.py:1476 (cmd_archive); same pattern at 1395 (cmd_add) and 1551 - all three break on 3.9, failing test_archive_moves_not_duplicates and test_add_has_entry_check_commit_roundtrip
+  CAUSE: the Windows EOL fix used the newline= kwarg of Path.write_text, which only exists since Python 3.10; the 3.9 cells never got past the earlier import error, so this only surfaced on the second CI run
+  FIX: new _write_lf(path, text) helper (open with newline="" keeps LF on Windows) replaces Path.write_text(newline=...) at all three call sites - cmd_add, cmd_archive, cmd_lessons; runs on Python 3.9 (CI matrix verified on re-push).
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

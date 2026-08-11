@@ -69,6 +69,14 @@ MAX_DIFF_BYTES = 8 * 1024 * 1024  # cap on untrusted diff input (S4): the
 # gate runs inside pre-commit hooks / CI and must never OOM on a huge diff
 
 
+def _write_lf(path, text):
+    """Write text preserving \n line endings on every platform.
+    Path.write_text only gained the newline= kwarg in Python 3.10, so this
+    helper keeps Python 3.9 compat (CI matrix runs 3.9)."""
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(text)
+
+
 def _check_input_cap(label: str, text: str) -> int | None:
     """Exit code 2 when text exceeds the input cap (S4), else None. One
     shared implementation so the guard cannot drift between input channels.
@@ -1392,7 +1400,7 @@ def cmd_add(path: Path, area: str, error: str, cause: str, status: str) -> int:
         f"  FIX: \n"
         f"  STATUS: {status}.\n"
     )
-    path.write_text(_insert_entry(text, entry), encoding="utf-8", newline="\n")
+    _write_lf(path, _insert_entry(text, entry))
     print(f"logged entry: AREA: {area} (STATUS: {status})")
     return 0
 
@@ -1473,7 +1481,7 @@ def cmd_archive(path: Path, days: int, apply: bool) -> int:
         + "\n\n"
     )
     new_text = "".join(new_parts).rstrip() + "\n\n" + archive_block + text[cut:].lstrip("\n")
-    path.write_text(new_text, encoding="utf-8", newline="\n")
+    _write_lf(path, new_text)
     print(f"archive: moved {len(to_move)} entrie(s) to the ARCHIVED section.")
     return 0
 
@@ -1548,7 +1556,7 @@ def cmd_lessons(log_path: Path, rules_path: Path, apply: bool) -> int:
         rules = pre.rstrip() + "\n\n" + section
     else:
         rules = rules.rstrip() + "\n\n" + section
-    rules_path.write_text(rules, encoding="utf-8", newline="\n")
+    _write_lf(rules_path, rules)
     print(f"lessons: wrote {len(top)} lesson(s) into {rules_path.name}.")
     return 0
 
