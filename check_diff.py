@@ -60,7 +60,7 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
 if sys.stdin and hasattr(sys.stdin, "reconfigure"):
     sys.stdin.reconfigure(encoding="utf-8", errors="replace")
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 HERE = Path(__file__).resolve().parent
 LOG_FILE = "errors.txt"

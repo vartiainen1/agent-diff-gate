@@ -11,7 +11,7 @@ stdlib-only CLI that sits between your AI coding agent and `git commit`,
 scans the diff, and flags the churn / vulnerability patterns AI-generated
 code tends to produce — **before** the code reaches a pull request.
 
-`v0.1.0` · MIT · Python 3.9+ · **zero dependencies** · fully offline — nothing
+`v0.2.0` · MIT · Python 3.9+ · **zero dependencies** · fully offline — nothing
 leaves your machine.
 
 ---

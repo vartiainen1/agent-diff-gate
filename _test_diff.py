@@ -2026,7 +2026,16 @@ class TestIntegration(unittest.TestCase):
     def test_version(self):
         rc, out = run_tool("--version")
         self.assertEqual(rc, 0)
-        self.assertIn("0.1.0", out)
+        self.assertIn(cd.VERSION, out)
+        # the release contract: CHANGELOG's first versioned header is the
+        # single source of truth (release.yml tags from it) and must match
+        # the code's VERSION constant - drift here means a mislabeled bump
+        changelog = (HERE / "CHANGELOG.md").read_text(encoding="utf-8")
+        versioned = next((ln for ln in changelog.splitlines()
+                          if ln.startswith("## [") and "Unreleased" not in ln),
+                         None)
+        self.assertIsNotNone(versioned, "no versioned CHANGELOG header found")
+        self.assertEqual(versioned[4:].split("]", 1)[0], cd.VERSION)
 
     def test_add_has_entry_check_commit_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:

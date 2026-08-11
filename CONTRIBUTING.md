@@ -44,6 +44,15 @@ so mistakes aren't reported twice.
    project's own convention and name the logged error in the commit message:
    `git commit -m "... (AREA: <what broke>)"`.
 
+## Releases
+
+Cut releases exactly as [`VERSIONING.md`](VERSIONING.md) prescribes:
+classify the diff since the last tag (PATCH / MINOR / MAJOR by
+finding-set stability), cut the CHANGELOG entry with the bold
+**Finding-set change:** label whenever findings can change, bump `VERSION`
+in `check_diff.py`, push — the release workflow tags and drafts from
+CHANGELOG.md (the single source of truth) — then publish the draft.
+
 ## Style
 
 - Follow the existing code: clear function docstrings, minimal comments,

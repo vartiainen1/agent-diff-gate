@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-08-11
 
 ### Added
 
@@ -13,14 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   R6 URL allow-list at runtime (repeatable, comma-separated; subdomains of an
   allowed host are covered; host values normalized). Teams with internal
   endpoints no longer need to fork the file.
+- **Versioning policy for the gate itself** — `VERSIONING.md` defines the
+  bump table (finding-set stability, not API stability), the CHANGELOG label
+  convention, the plugin rule, and the pre-1.0 cadence.
 
 ### Changed
 
-- R6 host matching now uses dot-boundary subdomain matching across the
-  built-in and user allow-lists; README carries measured size
-  (~76 KB / ~1,800 lines, rules 73% / infra 27%) and performance
-  (~0.4 s per 10k diff lines) facts; family positioning reframed as the
-  enforcement layer.
+- **Finding-set change:** R6 URL detection is now comment- and
+  docstring-aware — URL rows inside docstrings are no longer flagged (the
+  README's documented behavior, which the implementation previously did not
+  meet). Diffs that only contained URLs inside docstrings may now report
+  fewer findings.
+- **Finding-set change:** R6 host matching uses dot-boundary subdomain
+  matching across the built-in and user allow-lists (`company.com` covers
+  `api.staging.company.com`, never `notcompany.com`).
+- README carries measured size (~77 KB / ~1,820 lines, rules 73% / infra
+  27%) and performance (~0.5 s per 10k diff lines) facts; family
+  positioning reframed as the enforcement layer; the R6 test-file contract
+  and the dogfood proof-point are documented.
+- Tests: 165 -> 170, including R6 allow-list (flag/env/subdomain/
+  normalization) and docstring-awareness pinning tests.
 
 ## [0.1.0] - 2026-08-11
 

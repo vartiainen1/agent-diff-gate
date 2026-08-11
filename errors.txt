@@ -472,6 +472,20 @@ ACTIVE / RECENT ENTRIES
   FIX: R6 rules-detail gained the reviewer-prescribed line (URLs in test files are flagged by design - --fail-on low is an explicit contract; the escape hatch --exclude /*_test*/ + --allow-host is documented, never hidden); Why-this-exists gained the dogfood proof-point (15 findings on the tool's own codebase, all fixed or documented, none suppressed). No code change - R6 intentionally keeps no test-file heuristic.
   STATUS: FIXED.
 
+[2026-08-11] AREA: versioning policy (VERSIONING.md) + v0.2.0 release - reviewer round 3
+  ERROR: the gate has no versioning rule for itself: release bumps were human judgment, and the CHANGELOG did not flag finding-set changes, so a MINOR bump could silently break CI for upgraders
+  CAUSE: versioning predates the reviewer's insight that a linter's contract is finding-set + output-format stability; the round-2 diff (R6 semantics + new flag) is MINOR-class, so v0.1.1 would mislabel it
+  FIX: VERSIONING.md written (bump table keyed on finding-set + output-format
+       stability, location-moves-are-MINOR rule, new-rule-is-MINOR convention,
+       plugin rule, pre-1.0 cadence, 6-step release checklist); CHANGELOG cut as
+       0.2.0 with bold **Finding-set change:** labels on the two R6 changes;
+       --version test is now self-syncing (asserts VERSION matches the
+       CHANGELOG's first versioned header); VERSION 0.1.0 -> 0.2.0 in
+       check_diff.py + README; CONTRIBUTING gained the Releases checklist;
+       tag v0.2.0 + draft release via release.yml, then published.
+       Count: 170 tests (unchanged - the version test was modified, not added).
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 
