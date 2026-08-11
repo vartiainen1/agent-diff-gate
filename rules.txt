@@ -55,6 +55,7 @@ Reading order:
 4) LESSONS LEARNED (from the error log)
 ================================================================================
 Distilled from errors.txt (see the log for the full symptom -> cause -> fix).
+- CAUSE-keyword signal from check_diff.py --lessons: only (19x), rule (14x), text (11x), code (8x), try (6x), diff (6x), run (6x), comment (6x).
 - R3 try-scope must close on BOTH bare and typed except handlers
   (^\\s*(except|finally)\\b), not just bare `except:` — a scope that never
   closes silently misses unprotected calls after the block.
