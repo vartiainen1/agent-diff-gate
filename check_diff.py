@@ -240,6 +240,7 @@ VAR_FN_RE = re.compile(
 )
 
 # R6: hardcoded URLs on added lines (placeholder / docs hosts allowed)
+
 URL_RE = re.compile(r"https?://([A-Za-z0-9._-]+)")
 URL_ALLOW_HOSTS = {
     "localhost", "127.0.0.1", "0.0.0.0", "::1",
@@ -258,10 +259,11 @@ JS_RAW_PARSE_RE = re.compile(
 # clean - a bare \b boundary would false-positive on member access
 EVAL_EXEC_RE = re.compile(r"(?<![\w.])(?:eval|exec|compile)\s*\(")
 NEW_FUNCTION_RE = re.compile(r"\bnew\s+Function\s*\(")
-SHELL_TRUE_RE = re.compile(
+
+SUBPROCESS_CALL_RE = re.compile(
     r"\bsubprocess\.(?:run|Popen|call|check_call|check_output)\s*\("
-    r"[^)]*\bshell\s*=\s*True\b"
 )
+SHELL_TRUE_RE = re.compile(r"\bsubprocess\.(?:run|Popen|call|check_call|check_output)\s*\(.*\bshell\s*=\s*True\b")
 
 DEFAULT_SUGGEST = {
     R1_NAME: "load secrets from environment / a secret store; never commit tokens",
@@ -476,7 +478,7 @@ def rule_hardcoded_url(f: DiffFile) -> list[tuple]:
                 continue
             out.append((
                 "LOW", "R6", f.path, ln.lineno,
-                f"hardcoded URL '{m.group(0)[:44]}' - endpoint baked into code",
+                f"hardcoded URL '{m.group(0)}' - endpoint baked into code",
                 DEFAULT_SUGGEST[R6_NAME],
             ))
     return out
@@ -493,7 +495,8 @@ def rule_missing_input_validation(f: DiffFile) -> list[tuple]:
             t = ln.text
             if re.search(r"\btry\s*[:{]", t):
                 try_seen = True
-            if re.match(r"^\s*(except|finally|catch)\b", t):
+
+            if re.match(r"^\s*(?:except|finally|catch)\b|^\s*}\s*(?:catch|finally)\b", t):
                 try_seen = False
             if _looks_commented(t) or try_seen:
                 continue
@@ -514,33 +517,51 @@ def rule_missing_input_validation(f: DiffFile) -> list[tuple]:
     return out
 
 
+
 def rule_dangerous_eval_exec(f: DiffFile) -> list[tuple]:
     out = []
-    for ln in f.added:
-        t = ln.text
-        if _looks_commented(t):
-            continue
-        if re.search(EVAL_EXEC_RE, t):
-            out.append((
-                "MEDIUM", "R8", f.path, ln.lineno,
-                "eval()/exec()/compile() executes a string as code - "
-                "arbitrary-code-execution risk",
-                DEFAULT_SUGGEST[R8_NAME],
-            ))
-        if re.search(NEW_FUNCTION_RE, t):
-            out.append((
-                "MEDIUM", "R8", f.path, ln.lineno,
-                "new Function(...) builds code from a string - "
-                "arbitrary-code-execution risk",
-                DEFAULT_SUGGEST[R8_NAME],
-            ))
-        if re.search(SHELL_TRUE_RE, t):
-            out.append((
-                "MEDIUM", "R8", f.path, ln.lineno,
-                "subprocess with shell=True - command-injection risk with "
-                "untrusted input",
-                DEFAULT_SUGGEST[R8_NAME],
-            ))
+    for run in f.added_runs:
+        pending_sub = None  # added-line number of an open subprocess call
+        for ln in run:
+            t = ln.text
+            # a def/function/class line declares a name, it does not call it
+            if _looks_commented(t) or DEF_RE.match(t):
+                continue
+            if re.search(EVAL_EXEC_RE, t):
+                out.append((
+                    "MEDIUM", "R8", f.path, ln.lineno,
+                    "eval()/exec()/compile() executes a string as code - "
+                    "arbitrary-code-execution risk",
+                    DEFAULT_SUGGEST[R8_NAME],
+                ))
+            if re.search(NEW_FUNCTION_RE, t):
+                out.append((
+                    "MEDIUM", "R8", f.path, ln.lineno,
+                    "new Function(...) builds code from a string - "
+                    "arbitrary-code-execution risk",
+                    DEFAULT_SUGGEST[R8_NAME],
+                ))
+            # subprocess shell=True: same line, or a later line of an open call
+            if re.search(SUBPROCESS_CALL_RE, t):
+                if re.search(SHELL_TRUE_RE, t):
+                    out.append((
+                        "MEDIUM", "R8", f.path, ln.lineno,
+                        "subprocess with shell=True - command-injection risk with "
+                        "untrusted input",
+                        DEFAULT_SUGGEST[R8_NAME],
+                    ))
+                elif t.count("(") > t.count(")"):
+                    pending_sub = ln.lineno
+            elif pending_sub is not None and re.search(r"\bshell\s*=\s*True\b", t):
+                out.append((
+                    "MEDIUM", "R8", f.path, pending_sub,
+                    "subprocess with shell=True - command-injection risk with "
+                    "untrusted input",
+                    DEFAULT_SUGGEST[R8_NAME],
+                ))
+                pending_sub = None
+            if pending_sub is not None and t.count(")") > t.count("("):
+                pending_sub = None
     return out
 
 

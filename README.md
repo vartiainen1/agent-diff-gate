@@ -164,9 +164,9 @@ Session notes live in `notes.txt`, distilled lessons in `rules.txt`. Run
 
 ## Tests
 
-`python _test_diff.py` — 75 tests covering the diff parser, all eight rules
+`python _test_diff.py` — 78 tests covering the diff parser, all eight rules
 (happy + negative + edge), the gate model, the error-log tooling, and
-process-style output-value integration tests. all 75 should pass.
+process-style output-value integration tests. all 78 should pass.
 
 ## Companion tools
 

@@ -637,6 +637,54 @@ class TestRules(unittest.TestCase):
         finds = findings_for(d, "R8")
         self.assertEqual([f for f in finds if f.rule == "R8"], [])
 
+    def test_r7_js_try_catch_resets_scope(self):
+        # regression (reviewer): after '} catch (e) {' the try scope must
+        # close for JS too - a post-catch conversion is unguarded again
+        d = """diff --git a/x.js b/x.js
+--- a/x.js
++++ b/x.js
+@@ -1 +1,7 @@
+ ok
++try {
++  const p = parseInt(req.query.page);
++} catch (e) {
++  console.error(e);
++}
++const n = Number(req.body.count);
+"""
+        finds = findings_for(d, "R7")
+        self.assertTrue(any(f.line == 7 and f.rule == "R7" for f in finds))
+
+    def test_r8_function_definition_not_flagged(self):
+        # regression (reviewer): a user function named compile is a
+        # definition, not a call - MEDIUM false positive on clean code
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++def compile(src):
++    return src
+"""
+        finds = findings_for(d, "R8")
+        self.assertEqual([f for f in finds if f.rule == "R8"], [])
+
+    def test_r8_shell_true_multiline(self):
+        # regression (reviewer): shell=True on a later line of an open
+        # subprocess call must fire, reported on the call line
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,6 @@
+ ok
++subprocess.run(
++    cmd,
++    shell=True,
++)
+"""
+        finds = findings_for(d, "R8")
+        self.assertTrue(any(f.line == 2 and "shell=True" in f.message for f in finds))
+
 # ===========================================================================
 # gate / severity model
 # ===========================================================================

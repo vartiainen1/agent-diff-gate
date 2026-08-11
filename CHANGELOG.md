@@ -40,8 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 75 tests including process-style
-  output-value integration tests. all 75 should pass.
+- **Tests:** `_test_diff.py` — 78 tests including process-style
+  output-value integration tests. all 78 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 

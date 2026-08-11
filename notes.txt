@@ -17,8 +17,8 @@ SESSION NOTE (2026-08-11): agent-diff-gate v0.1.0 BUILT — first session
 - Dogfooding caught 3 real bugs, all logged in errors.txt before fixing:
   R3 try-scope never reset after except; R5 ignored the diff's own context
   lines in offline mode; R3 reset regex missed typed except handlers.
-- 75 tests green (parser + rules + gate + log tooling + process-style
-  output-value integration). README count 75 verified by the drift guard.
+- 78 tests green (parser + rules + gate + log tooling + process-style
+  output-value integration). README count 78 verified by the drift guard.
 - Kit shipped: README, rules.txt, errors.txt, notes.txt, CHANGELOG,
   AGENTS.md, pyproject.toml, SECURITY, CONTRIBUTING, CoC, LICENSE, hooks/
   installer + commit-msg hook, CI + release + publish workflows, start.py.
@@ -36,5 +36,9 @@ SESSION NOTE (2026-08-11): R6-R8 added - three new rules
   int(input(...)) / parseInt(req.query...) without a guard, try-aware like
   R3. R8 dangerous-eval-exec (MEDIUM): eval/exec/compile + new Function +
   subprocess shell=True; (?<![\w.]) keeps re.compile / .exec clean.
-- 13 new tests (positive + negative + process integration) -> 75 green.
+- 16 new tests (positive + negative + process integration) -> 78 green.
   Counts synced in README/CHANGELOG/CONTRIBUTING/AGENTS/notes/rules.
+- Code review round (all findings logged in errors.txt before fixing): R7 JS
+  try-scope reset on '} catch', R8 multi-line shell=True + def-not-flagged,
+  R6 message slice cleanup. Dogfood verified against a real repo: --range,
+  --staged and the default-gate severity interplay.

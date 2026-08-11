@@ -150,6 +150,30 @@ ACTIVE / RECENT ENTRIES
   FIX: implement R6/R7/R8 with anchored regexes, comment-skip, try-scope awareness (R7); add 13 tests; sync counts to 75; commit through the gate
   STATUS: FIXED.
 
+[2026-08-11] AREA: R7 JS try-scope never resets after a catch block (reviewer)
+  ERROR: rule_missing_input_validation resets try_seen only on lines starting with except/finally/catch; a JS '} catch (e) {' line starts with '}' so try_seen stays True for the rest of the run - post-catch parseInt(req.query...) outside the try is silently missed
+  CAUSE: same bug class as the logged R3 scope-reset lesson, re-introduced on the JS branch (the reset regex does not know JS brace style)
+  FIX: also reset on '^\s*}\s*(catch|finally)\b'; add a JS try/catch negative test
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R8 shell=True only detected on a single line (reviewer)
+  ERROR: SHELL_TRUE_RE uses [^)]* which cannot span lines and breaks when a paren appears inside a string before shell=True - multi-line subprocess.run( with shell=True is missed
+  CAUSE: the regex is line-scoped and paren-char-scanning; a multi-line call format is common in AI-generated code
+  FIX: scan per added-run: track open subprocess calls and flag shell=True on a later line of the same logical call; use .* not [^)]* on the same line
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R8 eval/exec/compile flags function definitions (reviewer)
+  ERROR: EVAL_EXEC_RE matches the definition line of a user's own function named compile/exec/eval ('def compile(x):' or 'function exec(...)') - a MEDIUM false positive on clean code
+  CAUSE: the lookbehind (?<![\w.]) excludes member access but not the def/function declaration keyword that precedes the name
+  FIX: skip lines that match DEF_RE (def/function/class declarations); add a negative test
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R6 URL message truncation is a no-op (reviewer)
+  ERROR: the [:44] slice in the R6 message is dead: URL_RE captures only scheme://host so group(0) is already short, and the path where the hardcoded-endpoint signal lives is never shown
+  CAUSE: URL_RE stops after the host; the message builder slices a string that is always under 44 chars
+  FIX: dropped the dead [:44] slice instead - the message now shows the endpoint host cleanly
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

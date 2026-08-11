@@ -46,7 +46,7 @@ Reading order:
   --lessons / --log), mirroring the agent-error-log family.
 - The eight rules (R1-R8) must never produce false positives on clean code:
   every rule change needs a test, both positive and negative.
-- Validate my changes: run `python _test_diff.py` (all 75 should pass),
+- Validate my changes: run `python _test_diff.py` (all 78 should pass),
   `python check_diff.py --log` (log healthy), and compile-check the touched
   scripts. Verify OUTPUT VALUES, not just exit codes.
 
@@ -76,3 +76,8 @@ Distilled from errors.txt (see the log for the full symptom -> cause -> fix).
 - Word-boundary regexes alone are not enough: `\bcompile\s*\(` also matches
   `re.compile(` — exclude member access with `(?<![\w.])` and pin it with
   a negative test for the clean-code neighbour.
+- Try-scope resets must know the language's block style: Python
+  except/finally vs JS '} catch'/'} finally' — a reset regex written for
+  one style silently misses the other.
+- Regexes that scan one line only (e.g. `[^)]*`) miss multi-line calls —
+  track the open call across the added-run instead.
