@@ -57,8 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 141 tests including process-style
-  output-value integration tests. all 141 should pass.
+- **Tests:** `_test_diff.py` — 145 tests including process-style
+  output-value integration tests. all 145 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 
@@ -105,6 +105,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   a path in try/except does not validate it, so R9 intentionally
   has none. Dogfood: full-history R9 findings 5 -> 0 (all five were
   string-literal fixture content, correctly silenced).
+
+- R10 scanned raw added lines: docstring prose and trailing comments
+  mentioning except Exception/BaseException fired (incl. its own
+  module-docstring row). The rule now walks the whole new-side file
+  through _code_only() with the file-backed opener seed (mirror of
+  R3/R7/R9); the swallow-shape check now looks at the next *added*
+  line instead of the next line of the same run, matching the file's
+  real structure. Dogfood: full-history R10 12 -> 8; the 4 gone were
+  docstring prose + triple-quoted fixture strings. Remaining 8 are
+  real handlers in the tool's own code, RULE_INFO strings, and docs
+  prose (the pre-existing docs self-trigger class).
 
 ## [0.0.0] — placeholder (never released)
 

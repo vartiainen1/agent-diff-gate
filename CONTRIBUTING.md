@@ -10,7 +10,7 @@ project — please keep it that way.
   macOS, and Linux.
 - **Small changes** — prefer minimal diffs; no gold-plating.
 - **Tested** — every change to `check_diff.py` or `start.py` must keep
-  `python _test_diff.py` green (all 141 should pass) and the error log
+  `python _test_diff.py` green (all 145 should pass) and the error log
   clean (`python check_diff.py --log`).
 - **Rules need negative tests** — a rule that fires on clean code is worse
   than no rule. Every rule change ships with both a positive and a negative

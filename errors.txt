@@ -327,6 +327,19 @@ ACTIVE / RECENT ENTRIES
        five were string-literal fixture content).
   STATUS: FIXED.
 
+[2026-08-11] AREA: R10 raw-line scanning - no comment/docstring awareness, docstring prose and trailing comments fire (mirror of R3/R7/R9)
+  ERROR: R10 scans added lines raw: docstring prose mentioning except Exception or BaseException fires (e.g. the rule's own module-docstring row), one-line docstrings and trailing '# ... except Exception ...' comments fire too - only a full-line _looks_commented() startswith check exists
+  CAUSE: rule_broad_exception matches on ln.text with no docstring state machine and no comment stripping; the _code_only() pipeline + file-backed seed R3/R7/R9 now use is absent
+  FIX: R10 now walks the whole new-side file through _code_only() with
+       the file-backed opener seed (mirror of R3/R7/R9); the swallow-
+       shape check looks at the immediately following line of the
+       merged stream (the handler's body start). Docstring prose,
+       one-line docstrings, and trailing comments no longer fire. 4 new
+       tests, 145 green, drift guard OK. Dogfood: full-history R10
+       12 -> 8; gone were docstring prose + fixture strings, remaining
+       are real handlers / RULE_INFO strings / docs prose.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

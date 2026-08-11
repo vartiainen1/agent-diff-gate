@@ -792,30 +792,36 @@ def rule_missing_path_validation(f: DiffFile, root: Path) -> list[tuple]:
             ))
     return out
 
-def rule_broad_exception(f: DiffFile) -> list[tuple]:
+def rule_broad_exception(f: DiffFile, root: Path) -> list[tuple]:
     """R10: catch-all handlers (except Exception / BaseException). The
     swallow-shapes (pass / continue / break bodies) stay R2's HIGH terrain."""
     out = []
-    for run in f.added_runs:
-        for i, ln in enumerate(run):
-            t = ln.text
-            if _looks_commented(t):
-                continue
-            m = BROAD_EXCEPT_RE.search(t)
-            if not m:
-                continue
-            if re.search(r":\s*(pass|\.\.\.|continue|break)\b", t[m.end():]):
-                continue
-            nxt = run[i + 1].text if i + 1 < len(run) else ""
-            if re.match(r"^\s*(pass|\.\.\.|continue|break)\s*$", nxt):
-                continue
-            out.append((
-                "MEDIUM", "R10", f.path, ln.lineno,
-                "overly broad exception handler catches every Exception type",
-                DEFAULT_SUGGEST[R10_NAME],
-            ))
+    # walk the whole new-side file through _code_only() so comments and
+    # docstring content (incl. prose rows and one-line docstrings) never
+    # fire, with the file-backed opener seed (mirror of R3/R7/R9). No try
+    # state: R10 flags the handler itself, not its position. The
+    # swallow-shape check looks at the immediately following line of the
+    # merged stream (context or added) - that IS the handler's body start.
+    lines = _new_side_lines(f)
+    in_doc = _docstring_state_before(f, root, lines)
+    for idx, (lineno, text, is_added) in enumerate(lines):
+        code, in_doc = _code_only(text, in_doc)
+        if not code.strip() or not is_added or _looks_commented(code):
+            continue
+        m = BROAD_EXCEPT_RE.search(code)
+        if not m:
+            continue
+        if re.search(r":\s*(pass|\.\.\.|continue|break)\b", code[m.end():]):
+            continue
+        nxt = lines[idx + 1][1] if idx + 1 < len(lines) else ""
+        if re.match(r"^\s*(pass|\.\.\.|continue|break)\s*$", nxt):
+            continue
+        out.append((
+            "MEDIUM", "R10", f.path, lineno,
+            "overly broad exception handler catches every Exception type",
+            DEFAULT_SUGGEST[R10_NAME],
+        ))
     return out
-
 
 def rule_todo_markers(f: DiffFile) -> list[tuple]:
     """R11: TODO/FIXME/XXX/HACK markers left in added lines = unfinished work."""
@@ -1067,7 +1073,7 @@ def analyze(
             add(sev, rule, file, line, msg, sugg)
         for sev, rule, file, line, msg, sugg in rule_missing_path_validation(f, root):
             add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_broad_exception(f):
+        for sev, rule, file, line, msg, sugg in rule_broad_exception(f, root):
             add(sev, rule, file, line, msg, sugg)
         for sev, rule, file, line, msg, sugg in rule_todo_markers(f):
             add(sev, rule, file, line, msg, sugg)

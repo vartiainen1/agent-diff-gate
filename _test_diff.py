@@ -1167,7 +1167,76 @@ class TestRules(unittest.TestCase):
         finds = findings_for(d, "R10")
         self.assertEqual([f for f in finds if f.rule == "R10"], [])
 
-    # --- R11 TODO/FIXME markers ----------------------------------------
+    def test_r10_docstring_prose_skipped(self):
+        # docstring prose mentioning the patterns is not code (mirror of
+        # the R3/R7/R9 docstring refinement)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,8 @@
+ ok
++try:
++    risky()
++except Exception as e:
++    logger.error(e)
++def handle():
++    """except Exception is discouraged; catch BaseException carefully.
++    """
+'''
+        finds = findings_for(d, "R10")
+        # docstring lines (7-8) stay silent...
+        self.assertEqual([f for f in finds if f.line in (7, 8)], [])
+        # ...the real broad handler with a body is still flagged
+        self.assertTrue(any(f.line == 4 for f in finds))
+
+    def test_r10_one_line_docstring_skipped(self):
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++    """except Exception is discouraged here."""
+'''
+        finds = findings_for(d, "R10")
+        self.assertEqual([f for f in finds if f.rule == "R10"], [])
+
+    def test_r10_trailing_comment_skipped(self):
+        # a trailing comment mentioning the pattern is not code: the '#'
+        # strip must remove it before matching
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,6 @@
+ ok
++x = 1  # except Exception handled upstream in handlers.py
++try:
++    risky()
++except Exception as e:
++    logger.error(e)
+'''
+        finds = findings_for(d, "R10")
+        # comment line (2) stays silent...
+        self.assertEqual([f for f in finds if f.line == 2], [])
+        # ...the real broad handler is still flagged
+        self.assertTrue(any(f.line == 5 for f in finds))
+
+    def test_r10_docstring_opener_in_context_silenced(self):
+        # the docstring opener is an unchanged context line: added prose
+        # rows inside it are not code (mirror of R3's context fix)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,4 @@
+ """
++R10 mentions except Exception in prose.
++R10 catches BaseException in prose too.
++R10 documents the policy.
+ """
+'''
+        finds = findings_for(d, "R10")
+        self.assertEqual([f for f in finds if f.rule == "R10"], [])
+
+    # --- R11 TODO/FIXME markers ------------------------------------------
     def test_r11_todo_marker(self):
         d = """diff --git a/x.py b/x.py
 --- a/x.py
