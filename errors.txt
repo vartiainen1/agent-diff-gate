@@ -289,6 +289,12 @@ ACTIVE / RECENT ENTRIES
   FIX: Refined rule_missing_error_handling to scan only real code via a new _code_only() helper: #-comments (only when preceded by whitespace), one-line docstrings, and multi-line docstring content (state-tracked by the opening delimiter) are stripped before pattern matching; a '# try:' comment can no longer open the try scope. 6 regression tests added (125 green).
   STATUS: FIXED.
 
+[2026-08-11] AREA: R6 allowed-hosts missing github.com/pypi.org - docs URLs trip LOW findings
+  ERROR: a diff that references a project's homepage or docs URL (https://github.com/... or https://pypi.org/...) trips a LOW R6 hardcoded-URL finding, which pollutes scans of README/docs-driven code
+  CAUSE: URL_ALLOW_HOSTS only covers spec/schema/doc hosts (w3.org, docs.python.org, react.dev, ...); the two most common package-homepage hosts are not in the set
+  FIX: Added github.com and pypi.org to URL_ALLOW_HOSTS so package-homepage/docs URLs no longer trip the LOW R6 finding; regression test test_r6_docs_hosts_ok added (126 green).
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

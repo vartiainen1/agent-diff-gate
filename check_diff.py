@@ -268,6 +268,7 @@ URL_ALLOW_HOSTS = {
     "example.com", "example.org", "example.net",
     "www.w3.org", "json-schema.org", "schemas.xmlsoap.org", "tools.ietf.org",
     "developer.mozilla.org", "docs.python.org", "python.org",
+    "github.com", "pypi.org",
     "react.dev", "reactjs.org", "nodejs.org", "keepachangelog.com", "semver.org",
 }
 # R7: conversion of raw user/request input without validation (Python + JS)

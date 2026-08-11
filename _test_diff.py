@@ -627,6 +627,16 @@ class TestRules(unittest.TestCase):
 +BASE = "http://localhost:8000"
 +ping("https://example.com")
 """
+    def test_r6_docs_hosts_ok(self):
+        # package-homepage/docs URLs must not trip the LOW finding
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++HOME = "https://github.com/org/repo"
++page = "https://pypi.org/project/thing/"
++"""
         finds = findings_for(d, "R6")
         self.assertEqual([f for f in finds if f.rule == "R6"], [])
 
