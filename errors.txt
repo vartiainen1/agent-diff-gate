@@ -391,8 +391,8 @@ ACTIVE / RECENT ENTRIES
 [2026-08-11] AREA: v0.1.0 first release cut - CHANGELOG versioned, tag + GitHub push pending
   ERROR: repo never had a tag, no GitHub remote, CI never run - the tool is feature-complete (164 tests) but unpublished
   CAUSE: release.yml tags from the CHANGELOG's first semver header; nothing was versioned so the workflow had nothing to fire on
-  FIX: 
-  STATUS: OPEN.
+  FIX: CHANGELOG cut as 0.1.0 (release.yml tags from the first semver header); repo created public at github.com/vartiainen1/agent-diff-gate; CI matrix all green (9/9 jobs, py 3.9/3.11/3.12 x ubuntu/windows); tag v0.1.0 pushed; draft release v0.1.0 open - publish manually on the Releases page when ready.
+  STATUS: FIXED.
 
 [2026-08-11] AREA: CI first run: py 3.9 matrix cells fail - PEP 604 union annotations evaluated at import
   ERROR: TypeError: unsupported operand type(s) for |: 'type' and 'NoneType' at check_diff.py:70 (int | None) on Python 3.9; 10 union annotations break the whole module at import - both 3.9 cells (ubuntu + windows) failed
