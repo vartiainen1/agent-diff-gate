@@ -117,3 +117,4 @@ SESSION NOTE (2026-08-11): dogfood - gate scanned its own commit history
   Fixed with encoding='utf-8' errors='replace' + regression test -> 119.
 - Takeaway: test-heavy repos should run --exclude '*_test*'; docs that
   describe the rules self-trigger them (expected); R4 on fixtures is noise.
+- 2026-08-11 reviewer round 2: --allow-host + AGENT_DIFF_GATE_HOSTS shipped (R6 allow-list, dot-boundary subdomain match, host normalization on read); R6 became docstring-aware (README claim now true); README honesty: 77 KB / 1,820 lines, rules 73% / infra 27%, ~0.4s per 10k diff lines measured; enforcement-layer positioning. Suite 165 -> 170, gate PASS 0 findings on the commit diff.
