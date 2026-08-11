@@ -1,0 +1,86 @@
+name: CI
+
+# Runs on every push and pull request. Backstop for the git hook: even if a
+# commit bypasses the local commit-msg gate (--no-verify), a broken error log
+# or test failure can no longer hide — the check fails here.
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    name: tests + linter (py ${{ matrix.python-version }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.9", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Compile check
+        run: python -m py_compile check_diff.py start.py
+
+      - name: Unit tests
+        run: python _test_diff.py
+
+      - name: Error-log linter (CI backstop)
+        run: python check_diff.py --log
+
+      - name: Hook syntax check
+        shell: bash
+        run: sh -n git-commitmsg-hook.sh hooks/block-no-verify.sh hooks/block-no-verify-hook.sh
+  docs-guard:
+    name: README test-count drift guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Drift guard (README count vs actual suite)
+        run: python3 _check_readme_count.py
+
+  packaging:
+    name: packaging (build + install + smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+      - name: Install wheel in a fresh venv
+        run: |
+          python -m venv /tmp/pkgenv
+          /tmp/pkgenv/bin/pip install --quiet dist/*.whl
+      - name: Console script + import smoke test
+        run: |
+          /tmp/pkgenv/bin/diff-gate --version >/dev/null
+          /tmp/pkgenv/bin/python -c "import check_diff; print('module import OK')"
+  commit-gate:
+    name: commit-message gate (log-before-fix)
+    if: github.event_name == 'push' # PR merge commits carry no AREA marker; PRs are gated at merge/push time
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Re-run the log-before-fix gate on the pushed commit
+        run: |
+          git log -1 --format=%B > commit_msg.txt
+          python3 check_diff.py --check-commit commit_msg.txt

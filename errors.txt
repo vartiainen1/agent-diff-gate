@@ -1,0 +1,148 @@
+================================================================================
+ERROR LOG — HOW TO USE
+================================================================================
+This is the ERROR LOG of the three-file system (rules / errors / notes).
+Every error encountered gets an entry: symptom -> cause -> fix -> status.
+
+MANDATORY: log FIRST, fix AFTER (enforced by check_diff.py and the
+git commit-msg hook). Write the CAUSE before you start fixing — that is the
+point of the whole system: if you cannot explain why it broke, you have not
+understood it yet.
+
+Statuses (canonical vocabulary): FIXED | PARTIAL | OPEN | MITIGATED | WORKAROUND
+  FIXED        the error is gone
+  PARTIAL      partially fixed / fix in progress
+  OPEN         not fixed yet
+  MITIGATED    no real fix, but a safety net / fallback is in place
+  WORKAROUND   a workaround is used instead of a proper fix
+
+Tooling (run from this folder):
+  python check_diff.py --log                        validate every entry
+  python check_diff.py --add --area "..." --error "..." --cause "..." [--status]
+  python check_diff.py --has-entry "<AREA>"         gate a fix before applying it
+  python check_diff.py --archive-days N [--apply]   archive old FIXED entries
+  python _test_diff.py                              run the tooling's unit tests
+
+================================================================================
+ACTIVE / RECENT ENTRIES
+================================================================================
+
+[2026-08-11] AREA: R3 missing-error-handling try-scope never resets after except
+  ERROR: int(port_str) / json.loads(raw) added AFTER a try/except block were
+         not flagged, even though they are outside the guarded block
+  CAUSE: rule_missing_error_handling keeps try_seen=True for the whole added
+         run once any 'try:' line appears; it never closes the scope at the
+         matching except/finally/else, so later unprotected calls are missed
+  FIX: the rule now tracks the try scope statement-by-statement: try_seen is
+       set on 'try:' and reset on lines matching ^\s*(except|finally)\b.
+       Verified live: int()/json.loads() after the block are now reported.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R5 ignores-existing misses defs visible in the diff context
+  ERROR: redefinition of 'connect' (def appears in both context and added
+         lines) was NOT flagged when running --file/--stdin on a diff whose
+         files are not on disk
+  CAUSE: rule_ignores_existing only reads existing names from the file on
+         disk (root / path); in --file/--stdin mode the files do not exist,
+         so the set is empty and the diff's own context lines are ignored
+  FIX: rule_ignores_existing now unions names from the diff's unchanged
+       context lines with the on-disk set (removed lines excluded, since
+       removed+added is a replacement, not a duplicate). Verified live:
+       the redefined 'connect' in the --file smoke diff is now flagged.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R3 try-scope reset misses typed except handlers
+  ERROR: int(port_str) / json.loads(raw) after `except OSError:` were still
+         NOT flagged, while after a bare `except:` they were
+  CAUSE: the reset regex ^\s*(except|finally)\s*: only matches a BARE except
+         (colon right after the keyword); `except OSError:` has a type name in
+         between, so the try scope never closes and later unguarded calls are
+         missed again — the earlier R3 fix was incomplete
+  FIX: the reset regex now matches ^\s*(except|finally)\b so both bare and
+       typed handlers close the scope. Verified by the regression test
+       test_r3_int_conversion_after_except_flagged.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: --staged/--range git modes always fail - source label mistaken for error
+  ERROR: `check_diff.py --range HEAD~1 HEAD` and `--staged` exit 2 with
+         "GATE: cannot read diff — git diff (range)" even when the diff is
+         readable; caught by the first live dogfood run (scratch repo)
+  CAUSE: get_diff() returns (out, source_label) on success and ("", err) on
+         failure, but main() treats ANY non-empty second value as an error -
+         so the successful label "git diff (range)" is printed as a failure.
+         The integration tests only ever used --stdin/--file, so the
+         git-backed modes were never exercised (lesson-8 class: untested
+         command surface ships broken)
+  FIX: get_diff() now returns only (out, err); the caller builds the source
+       label. Verified live: --range and --staged both work against a real
+       scratch git repo (dogfood demo caught R1-R5, gate FAIL, rc=1), and
+       a new subprocess regression test exercises both modes in CI.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: --add inserts entries after the EXAMPLE section - invisible to the gate
+  ERROR: a freshly logged entry (git-modes bug) was not found by
+         --has-entry / the commit-msg hook, blocking an otherwise valid commit
+  CAUSE: _insert_entry() only cut at the template / archived markers, so new
+         entries landed AFTER the EXAMPLE ENTRIES section; parse_entries()
+         stops at the EXAMPLE section, so the new entry was never parsed.
+         Same for cmd_archive's head-preservation cut. (Found while
+         dogfooding the commit gate on the first real commit.)
+  FIX: _insert_entry() now cuts at the first example/template/archived
+       section header (via _active_cut), so new entries go into the ACTIVE
+       section where they are parsed.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: --archive-days --apply duplicates entries instead of moving them
+  ERROR: archiving a FIXED entry keeps it in the ACTIVE section AND appends a
+         copy to the ARCHIVED section — the log grows instead of shrinking
+  CAUSE: cmd_archive() rebuilds as head + archive_block + tail where head is
+         text[:cut] verbatim — the original entries are never removed, so the
+         archive block duplicates them (the family's known re-archive
+         duplication class, reproduced here)
+  FIX: cmd_archive() now rebuilds by REMOVING the moved entries from the
+       active section (splicing around their spans) and appending them only
+       in the ARCHIVED block.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: section-marker search matches inside entry bodies - log gets truncated
+  ERROR: an entry whose CAUSE text mentions a section marker (e.g. 'EXAMPLE
+         ENTRIES') is cut off mid-body: parse_entries truncates at the first
+         TEXT match, dropping the rest of the entry and every entry after it
+  CAUSE: the marker search is text.find(marker) — an unanchored substring
+         match. Section headers start at column 0, but an entry body may
+         mention the marker phrase indented, and the find() hits the body
+         occurrence first. The parse cut and the insert/archive cuts share
+         the same flaw
+  FIX: the marker search is now anchored to line starts
+       (^marker via re.MULTILINE) in _active_cut() and parse_entries(), so
+       only real section headers cut the parse region.
+  STATUS: FIXED.
+
+================================================================================
+EXAMPLE ENTRIES (replace with your own; delete this section header)
+================================================================================
+
+[2026-08-05] AREA: payment webhook parser
+  ERROR: KeyError: 'amount' on webhook payloads without an amount field
+  CAUSE: the payload dict has no 'amount' key; payload['amount'] raises
+         instead of defaulting
+  FIX: use payload.get('amount', 0) and guard None before .strip()
+  STATUS: FIXED.
+
+[2026-08-07] AREA: image resize service timeouts
+  ERROR: resize job hangs for >60s on 50MP inputs
+  CAUSE: Pillow opens the full image into memory before resizing
+  FIX: (pending — use progressive downscaling / streaming resize)
+  STATUS: OPEN.
+
+================================================================================
+5) TO ADD A NEW ENTRY
+================================================================================
+Copy this template (or run: python check_diff.py --add — it scaffolds
+the entry for you and validates the status):
+
+  [YYYY-MM-DD] AREA: <what broke>
+    ERROR: <symptom — what went wrong>
+    CAUSE: <root cause — write this BEFORE fixing>
+    FIX: <what fixed it — fill in after fixing>
+    STATUS: FIXED | PARTIAL | OPEN | MITIGATED | WORKAROUND

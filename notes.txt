@@ -1,0 +1,27 @@
+================================================================================
+NOTES — general text + session notes (agent-diff-gate)
+================================================================================
+This is the NOTES file of the three-file system (rules / errors / notes).
+Session notes go here, dated. Keep them short and factual.
+
+================================================================================
+SESSION NOTE (2026-08-11): agent-diff-gate v0.1.0 BUILT — first session
+================================================================================
+- New repo in the agent-memory family (error-log / decision-log / log-ai).
+  Position: pre-commit quality gate for AI-generated code.
+- check_diff.py ships: unified-diff parser, 5 rules (R1 secrets, R2 silent
+  failure, R3 missing error handling, R4 duplicate logic, R5 ignores
+  existing), severity model with --fail-on/--warn-only, --json, --stdin/
+  --staged/--range/--file sources, and the family error-log tooling
+  (--add/--has-entry/--check-commit/--archive-days/--lessons/--log).
+- Dogfooding caught 3 real bugs, all logged in errors.txt before fixing:
+  R3 try-scope never reset after except; R5 ignored the diff's own context
+  lines in offline mode; R3 reset regex missed typed except handlers.
+- 62 tests green (parser + rules + gate + log tooling + process-style
+  output-value integration). README count 62 verified by the drift guard.
+- Kit shipped: README, rules.txt, errors.txt, notes.txt, CHANGELOG,
+  AGENTS.md, pyproject.toml, SECURITY, CONTRIBUTING, CoC, LICENSE, hooks/
+  installer + commit-msg hook, CI + release + publish workflows, start.py.
+- NOT published to GitHub yet (user decision: build local first).
+- Next: dogfood against a real repo diff, live PR-flow demo, then publish
+  decision + pitch kit.

@@ -1,0 +1,75 @@
+================================================================================
+RULES — HOW TO WORK IN THIS REPO (agent-diff-gate)
+================================================================================
+This is the RULES file of the three-file system (rules / errors / notes).
+It tells AI coding agents how to behave while working in this repo. The
+companion files:
+  - errors.txt  every error encountered + its cause + the fix (log FIRST)
+  - notes.txt   session notes + context
+All three cross-reference each other.
+
+================================================================================
+1) SESSION START
+================================================================================
+Run `python start.py` at the start of every session. It prints the reading
+order, the mandatory rules, the open errors and the latest session note.
+
+Reading order:
+  1. rules.txt      -> this file
+  2. errors.txt     -> check BEFORE coding / debugging
+  3. notes.txt      -> notes + session context
+
+================================================================================
+2) MANDATORY RULES (no exceptions)
+================================================================================
+- CHECK BEFORE CODING: review errors.txt before writing or modifying ANY
+  code, so past mistakes are not repeated.
+- LOG BEFORE FIXING: found an error? Log it in errors.txt FIRST
+  (python check_diff.py --add), only then fix it. Verify with:
+  python check_diff.py --has-entry "<what broke>"
+- The git commit-msg hook blocks code commits whose message lacks an
+  "AREA: <text>" marker matching a logged entry:
+    git commit -m "fix <thing> (AREA: <what broke>)"
+- Never use `git commit --no-verify` — it skips the gate. If the hook blocks
+  you, the error is not logged; log it first.
+- Docs/notes-only commits pass automatically.
+
+================================================================================
+3) CODE CONVENTIONS
+================================================================================
+- Stdlib only, zero dependencies. Python 3.9+, plain and portable
+  (Windows / macOS / Linux).
+- Match the existing style: type hints, dataclass-like models, docstrings,
+  UTF-8 everywhere; Windows consoles get utf-8 reconfigure in scripts.
+- The product is `check_diff.py` — the diff gate. It also carries the
+  error-log tooling (--add / --has-entry / --check-commit / --archive-days /
+  --lessons / --log), mirroring the agent-error-log family.
+- The five rules (R1-R5) must never produce false positives on clean code:
+  every rule change needs a test, both positive and negative.
+- Validate my changes: run `python _test_diff.py` (all 62 should pass),
+  `python check_diff.py --log` (log healthy), and compile-check the touched
+  scripts. Verify OUTPUT VALUES, not just exit codes.
+
+================================================================================
+4) LESSONS LEARNED (from the error log)
+================================================================================
+Distilled from errors.txt (see the log for the full symptom -> cause -> fix).
+- R3 try-scope must close on BOTH bare and typed except handlers
+  (^\\s*(except|finally)\\b), not just bare `except:` — a scope that never
+  closes silently misses unprotected calls after the block.
+- R5 must read existing symbols from the diff's unchanged context lines as
+  well as from disk, so it works in --file/--stdin mode too; removed+added
+  same-name pairs are replacements, not duplicates.
+- New features need regression tests that pin the exact behavior; a test
+  that only asserts the happy path lets scope bugs through.
+- UNTESTED COMMAND SURFACE SHIPS BROKEN: the git-backed modes (--staged,
+  --range) were never exercised by the suite (only --stdin/--file were), and
+  both were broken on first use. Every public flag needs a subprocess test.
+- Every analysis rule that tracks scope must close it at ALL the boundaries
+  (bare AND typed except, finally), and every rule must be verified with
+  output-VALUE checks against a REAL repo, not just unit fixtures.
+- Log-tooling discipline: section markers must be line-anchored (^marker),
+  never text.find(marker) — an entry body that mentions a marker phrase
+  truncates the parse region; new entries must land in the ACTIVE section
+  (before the EXAMPLE header), and archive must REMOVE moved entries, not
+  append a duplicate.

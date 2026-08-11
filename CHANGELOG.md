@@ -1,0 +1,49 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+### Added
+
+- **`check_diff.py` — the Agent Diff Gate.** A zero-dependency, stdlib-only
+  CLI that analyzes git diffs for the churn / vulnerability patterns
+  AI-generated code tends to produce, before the code reaches a PR.
+- **Diff sources:** working tree (`git diff`), staged (`--staged`), commit
+  range (`--range A B`), stdin (`--stdin`), or a saved diff file (`--file`).
+- **Five rules:**
+  - R1 `hardcoded-secrets` (HIGH) — GitHub tokens, `sk-` API keys, AWS keys,
+    private keys, credential literals (placeholders and env lookups ignored).
+  - R2 `silent-failure` (HIGH/MEDIUM) — `except: pass`, empty handlers, bare
+    except, empty `catch {}`.
+  - R3 `missing-error-handling` (MEDIUM, Python) — `open()`/`int()`/
+    `json.loads()` outside try/with, with statement-level try-scope tracking.
+  - R4 `duplicate-logic` (MEDIUM) — identical statements added 2+ times.
+  - R5 `ignores-existing` (MEDIUM) — redefines a symbol already in the file
+    (diff-context aware, works offline).
+- **Gate model:** `--fail-on high|medium|low|none`, `--warn-only`,
+  `--rule R1,R2`, `--exclude GLOB`, `--max-findings N`, `--json` output.
+  Exit codes: 0 pass / 1 findings / 2 usage error.
+- **Error-log tooling** (agent-error-log family discipline): `--add`,
+  `--has-entry`, `--check-commit`, `--archive-days N [--apply]`,
+  `--lessons [--apply]`, `--log [PATH]`, `--logfile PATH` override.
+- **Full repo kit:** commit-msg hook, `hooks/install.sh` blockers,
+  CI (tests + linter + drift guard + commit gate), release + publish
+  workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
+  CONTRIBUTING, Code of Conduct, MIT license.
+- **Tests:** `_test_diff.py` — 62 tests including process-style
+  output-value integration tests. all 62 should pass.
+
+### Fixed (dogfood, logged in errors.txt before fixing)
+
+- R3 try-scope never reset after an except block — later unprotected calls
+  were missed.
+- R5 ignored the diff's own context lines in `--file`/`--stdin` mode.
+- R3 scope reset missed typed except handlers (`except OSError:`).
+
+## [0.0.0] — placeholder (never released)
+
+- Repository scaffolding only.
