@@ -417,6 +417,104 @@ class TestRules(unittest.TestCase):
         finds = findings_for(d, "R3")
         self.assertEqual([f for f in finds if f.rule == "R3"], [])
 
+    def test_r3_comment_lines_skipped(self):
+        # full-line and trailing comments mentioning APIs are not code
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,4 @@
+ ok
++# open(data_file) happens in helpers.py
++x = 1  # json.loads(raw) is cached upstream
++port = 1  # int("8080") was validated earlier
++'''
+        finds = findings_for(d, "R3")
+        self.assertEqual([f for f in finds if f.rule == "R3"], [])
+
+    def test_r3_docstring_content_skipped(self):
+        # the dogfood false positive: docstring prose mentions the APIs, and
+        # prose on the opening-quote line must be skipped too
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,7 @@
+ ok
++def load(fn):
++    """Open a file with open() and parse it with json.loads(); cast the
++    result with int() where possible.
++    """
++    pass
++fh = open("data.txt")
++'''
+        finds = findings_for(d, "R3")
+        # docstring lines (3-5) stay silent...
+        self.assertEqual([f for f in finds if f.line in (3, 4, 5)], [])
+        # ...but the real open() after the docstring is still caught
+        self.assertTrue(any(f.line == 7 and "open()" in f.message
+                            for f in finds))
+
+    def test_r3_try_comment_no_state_corruption(self):
+        # a '# try:' comment must NOT open the try scope, or real unguarded
+        # calls after it would be hidden (regression: comment lines used to
+        # set try_seen)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,4 @@
+ ok
++# try: wrapped upstream in utils.py
++fh = open("data.txt")
++port = int(port_str)
++'''
+        finds = findings_for(d, "R3")
+        self.assertTrue(any("open()" in f.message for f in finds))
+        self.assertTrue(any("int()" in f.message for f in finds))
+
+    def test_r3_one_line_docstring_skipped(self):
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++def parse():
++    """Uses open() and json.loads() internally."""
++'''
+        finds = findings_for(d, "R3")
+        self.assertEqual([f for f in finds if f.rule == "R3"], [])
+
+    def test_r3_hash_inside_string_not_masked(self):
+        # a '#' inside a string literal is not a comment, so the real code
+        # on the line must still be scanned (reviewer: '#'-strip masked it)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++s = "#" + open("data.txt")
++'''
+        finds = findings_for(d, "R3")
+        self.assertTrue(any("open()" in f.message for f in finds))
+
+    def test_r3_single_quote_docstring_skipped(self):
+        # a lone '"""' inside a "'''" docstring must NOT close the block
+        # (reviewer: the close check summed both quote types)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,5 @@
+ ok
++\'\'\'
++Uses open() and one """ in the prose.
++\'\'\'
++fh = open("data.txt")
++'''
+        finds = findings_for(d, "R3")
+        # docstring lines (2-4) stay silent...
+        self.assertEqual([f for f in finds if f.line in (2, 3, 4)], [])
+        # ...but the real open() after the docstring is still caught
+        self.assertTrue(any(f.line == 5 and "open()" in f.message
+                            for f in finds))
+
     # --- R4 duplicate logic ---------------------------------------------
     def test_r4_duplicate_statement(self):
         d = """diff --git a/x.py b/x.py

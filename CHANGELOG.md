@@ -57,8 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 119 tests including process-style
-  output-value integration tests. all 119 should pass.
+- **Tests:** `_test_diff.py` — 125 tests including process-style
+  output-value integration tests. all 125 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 
@@ -66,6 +66,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   were missed.
 - R5 ignored the diff's own context lines in `--file`/`--stdin` mode.
 - R3 scope reset missed typed except handlers (`except OSError:`).
+- R3 fired on comments and docstring prose (its own module docstring
+  and triple-quoted test fixtures): the rule now inspects only real
+  code via `_code_only()`, which strips `#` comments, one-line
+  docstrings, and multi-line docstring content (state-tracked), and
+  a `# try:` comment can no longer open the try scope. Accepted
+  heuristics: only a matching delimiter closes a docstring block;
+  `#` preceded by whitespace is a comment (so `#` inside string
+  literals is preserved); runtime triple-quoted assignments are
+  treated as docstrings; a docstring split across a context line
+  resets its state.
 
 ## [0.0.0] — placeholder (never released)
 

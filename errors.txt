@@ -283,6 +283,12 @@ ACTIVE / RECENT ENTRIES
        Regression test: --range over a diff containing U+204F (E2 81 8F).
   STATUS: FIXED.
 
+[2026-08-11] AREA: R3 flags its own docstring and string fixtures - rule must skip comments and triple-quoted content (dogfood)
+  ERROR: the dogfood scan showed R3 firing on its own module docstring (check_diff.py:8, which mentions open()/json.loads()) and on triple-quoted test fixtures in _test_diff.py - those are documentation/string content, not code
+  CAUSE: rule_missing_error_handling scans every added line with no comment or docstring awareness: OPEN_RE/JSON_LOADS_RE/CONV_RE match the API names wherever they appear, and comment lines containing 'try:' can even corrupt the try-scope state
+  FIX: Refined rule_missing_error_handling to scan only real code via a new _code_only() helper: #-comments (only when preceded by whitespace), one-line docstrings, and multi-line docstring content (state-tracked by the opening delimiter) are stripped before pattern matching; a '# try:' comment can no longer open the try scope. 6 regression tests added (125 green).
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

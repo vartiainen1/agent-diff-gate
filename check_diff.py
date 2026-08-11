@@ -423,35 +423,37 @@ def rule_missing_error_handling(f: DiffFile) -> list[tuple]:
     out = []
     for run in f.added_runs:
         try_seen = False
+        in_doc = None
         for ln in run:
-            t = ln.text
-            if re.search(r"\btry\s*:", t):
+            code, in_doc = _code_only(ln.text, in_doc)
+            if not code.strip():
+                continue
+            if re.search(r"\btry\s*:", code):
                 try_seen = True
             # the try block is over: later lines are unguarded again.
             # \b (not \s*:) so BOTH bare 'except:' and typed 'except OSError:'
             # close the scope (logged: R3 try-scope reset misses typed handlers)
-            if re.match(r"^\s*(except|finally)\b", t):
+            if re.match(r"^\s*(except|finally)\b", code):
                 try_seen = False
-            if OPEN_RE.search(t) and "with" not in t and not try_seen:
+            if OPEN_RE.search(code) and "with" not in code and not try_seen:
                 out.append((
                     "MEDIUM", "R3", f.path, ln.lineno,
                     "open() called outside try/with — missing file-error handling",
                     "use 'with open(...)' and catch FileNotFoundError/OSError",
                 ))
-            if JSON_LOADS_RE.search(t) and not try_seen:
+            if JSON_LOADS_RE.search(code) and not try_seen:
                 out.append((
                     "MEDIUM", "R3", f.path, ln.lineno,
                     "json.loads() without a try — JSONDecodeError can crash",
                     "wrap in try/except json.JSONDecodeError",
                 ))
-            if CONV_RE.search(t) and not try_seen:
+            if CONV_RE.search(code) and not try_seen:
                 out.append((
                     "MEDIUM", "R3", f.path, ln.lineno,
                     "int()/float() on a variable without a guard — ValueError risk",
                     "validate the input or wrap in try/except ValueError",
                 ))
     return out
-
 
 def _substantive(text: str) -> bool:
     t = text.strip()
@@ -543,7 +545,34 @@ def _looks_commented(t: str) -> bool:
     s = t.lstrip()
     return s.startswith(("#", "//", "/*", "*", '"""', "'''"))
 
+def _code_only(t: str, in_doc: str | None) -> tuple[str, str | None]:
+    """Return (code, in_doc) with docstring content and #-comments removed.
 
+    R3 inspects only real code: prose inside a triple-quoted string and
+    comments (full-line or trailing) must not trigger findings, and must not
+    corrupt the try-scope state (e.g. a '# try:' comment used to set
+    try_seen). `in_doc` is the *opening delimiter* (triple-double quote or
+    triple-single quote) while inside a docstring, so only a matching
+    delimiter closes it: a lone triple-double quote in prose inside a
+    triple-single docstring no longer ends the block. When a line opens a
+    docstring, everything from the first triple quote on is treated as
+    content. Only '#' preceded by whitespace (or at line start) is a
+    comment, so '#' inside a string literal is preserved.
+
+    Accepted heuristics: `in_doc` resets at each added-run boundary, so a
+    docstring split across a context line loses state; runtime triple-quoted
+    string assignments are treated as docstrings.
+    """
+    if in_doc:
+        # content line: skipped; an odd count of the opening delimiter closes
+        return ("", None) if t.count(in_doc) % 2 else ("", in_doc)
+    s = re.sub(r"(^|\s)#.*$", r"\1", t)  # real #-comment, not a string '#'
+    for q in ('"""', "'''"):
+        s = re.sub(re.escape(q) + r"[\s\S]*?" + re.escape(q), "", s)
+        if s.count(q) % 2:
+            # docstring left open: keep only code before the opening quote
+            return s.split(q, 1)[0], q
+    return s, None
 def rule_hardcoded_url(f: DiffFile) -> list[tuple]:
     out = []
     for ln in f.added:
