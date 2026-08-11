@@ -515,6 +515,130 @@ class TestRules(unittest.TestCase):
         self.assertTrue(any(f.line == 5 and "open()" in f.message
                             for f in finds))
 
+    def test_r3_docstring_opener_in_context_silenced(self):
+        # the mid-docstring gap: the """ opener is an unchanged context line
+        # and new rows are added inside the docstring — prose, not code
+        # (dogfood: ecfab7f added the R9/R10/R11 rows mid-docstring)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,4 @@
+ """
++R9 missing-path-validation: Path() and open() on user input.
++R10 risky-exception: json.loads() without a guard.
++R11 TODO markers: cast with int() before compare.
+ """
+'''
+        finds = findings_for(d, "R3")
+        self.assertEqual([f for f in finds if f.rule == "R3"], [])
+
+    def test_r3_docstring_closed_then_real_code_flagged(self):
+        # after the context-opened docstring closes (added line), real code
+        # added after it is caught again — the state must not leak past the
+        # closing delimiter
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,5 @@
+ """
++R9 prose with open() and json.loads().
++"""
++fh = open("data.txt")
++port = int(port_str)
+'''
+        finds = findings_for(d, "R3")
+        # prose rows inside the context-opened docstring stay silent
+        self.assertEqual([f for f in finds if f.line in (2, 3)], [])
+        # real code after the close is still flagged
+        self.assertTrue(any(f.line == 4 and "open()" in f.message
+                            for f in finds))
+        self.assertTrue(any(f.line == 5 and "int()" in f.message
+                            for f in finds))
+
+    def test_r3_try_opener_in_context_suppresses_added_calls(self):
+        # a try: in an unchanged context line guards added calls (mirror of
+        # the docstring gap: try-scope also crossed the run boundary before)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1,5 +1,7 @@
+ try:
+     step1()
+     result = fetch()
++fh = open("data.txt")
++data = json.loads(raw)
+ except OSError:
+     pass
+'''
+        finds = findings_for(d, "R3")
+        self.assertEqual([f for f in finds if f.rule == "R3"], [])
+
+    def test_r3_except_reset_carries_into_run(self):
+        # the except: reset also crosses context lines: added unguarded
+        # calls after an unchanged except: are still flagged
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1,5 +1,7 @@
+ try:
+     step1()
+ except OSError:
+     pass
++port = int(port_str)
++data = json.loads(raw)
+ ok()
+'''
+        finds = findings_for(d, "R3")
+        self.assertTrue(any(f.line == 5 and "int()" in f.message
+                            for f in finds))
+        self.assertTrue(any(f.line == 6 and "json.loads" in f.message
+                            for f in finds))
+
+    def test_r3_file_docstring_opened_before_diff_silenced(self):
+        # the opener sits *outside* the diff (before the first hunk): only
+        # the file on disk knows the added row is prose (dogfood: ecfab7f
+        # added the R9/R10/R11 rows mid-docstring)
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "x.py"
+            f.write_text('"""\n'
+                         "R1 does open() on files.\n"
+                         "R2 does json.loads() on payloads.\n"
+                         '"""\n'
+                         "def load():\n"
+                         "    pass\n", encoding="utf-8")
+            d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -3,4 +3,5 @@
+ R1 does open() on files.
+ R2 does json.loads() on payloads.
++RN does int() on raw input.
+ """
+ def load():
+'''
+            finds = findings_for(d, "R3", root=Path(tmp))
+            self.assertEqual([f for f in finds if f.rule == "R3"], [])
+
+    def test_r3_file_docstring_closed_before_diff_still_flags(self):
+        # the docstring closes before the first hunk: the seed resolves to
+        # None and real added code after it is still flagged (no leak)
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "x.py"
+            f.write_text('"""\n'
+                         "prose\n"
+                         '"""\n'
+                         "ok()\n", encoding="utf-8")
+            d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -4,2 +4,3 @@
+ ok()
++port = int(port_str)
+'''
+            finds = findings_for(d, "R3", root=Path(tmp))
+            self.assertTrue(any(f.line == 5 and "int()" in f.message
+                                for f in finds))
+
     # --- R4 duplicate logic ---------------------------------------------
     def test_r4_duplicate_statement(self):
         d = """diff --git a/x.py b/x.py

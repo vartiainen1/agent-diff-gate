@@ -295,6 +295,16 @@ ACTIVE / RECENT ENTRIES
   FIX: Added github.com and pypi.org to URL_ALLOW_HOSTS so package-homepage/docs URLs no longer trip the LOW R6 finding; regression test test_r6_docs_hosts_ok added (126 green).
   STATUS: FIXED.
 
+[2026-08-11] AREA: R3 mid-docstring gap - added rows inside a docstring whose opener is a context line are flagged (dogfood ecfab7f)
+  ERROR: the R3 docstring state machine resets in_doc (and try_seen) at every added-run boundary, so when the triple-quote opener is an unchanged context line (or an earlier run) and new rows are added mid-docstring, those prose rows are scanned as code and trip open()/json.loads()/int() findings (seen: ecfab7f added the R9/R10/R11 rows mid-docstring and check_diff.py:14 was flagged)
+  CAUSE: rule_missing_error_handling loops per added-run with in_doc=None and try_seen=False fresh per run; context lines are never processed, so state opened before the run is invisible
+  FIX: parser records new-side linenos for context lines; R3 walks the
+       whole new-side file (context + added, in order) so docstring and
+       try-scope state crosses context lines, and seeds the opener from
+       the real file when available. ecfab7f mid-docstring rows: 1
+       finding -> 0. 132 tests, drift guard OK.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

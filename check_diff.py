@@ -104,6 +104,7 @@ class DiffFile:
         self.binary = False
         self.added: list[AddedLine] = []
         self.context: list[str] = []   # unchanged lines (the pre-change file)
+        self.context_n: list[int] = []  # their new-side linenos (state tracking)
         self.removed: list[str] = []   # '-' lines (the pre-change file)
 
     @property
@@ -182,6 +183,7 @@ def parse_diff(text: str) -> list[DiffFile]:
         elif line.startswith(" "):
             if cur is not None:
                 cur.context.append(line[1:])
+                cur.context_n.append(new_n)
             old_n += 1
             new_n += 1
         # "\\ No newline at end of file" and anything else: no counter change
@@ -418,42 +420,101 @@ def rule_silent_failure(f: DiffFile) -> list[tuple]:
     return out
 
 
-def rule_missing_error_handling(f: DiffFile) -> list[tuple]:
+def _new_side_lines(f: DiffFile) -> list[tuple[int, str, bool]]:
+    """(lineno, text, is_added) for the new-side file, in order.
+
+    Context lines carry no lineno on their own, so the parser records them
+    in ``context_n`` (new-side numbering, kept in sync with ``context``).
+    Merging the two ascending lists yields the exact new-side stream, which
+    lets rules track state (docstrings, try-scope) across unchanged lines
+    instead of resetting at each added-run boundary.
+    """
+    merged = [(f.context_n[i], f.context[i], False)
+              for i in range(len(f.context))]
+    merged += [(ln.lineno, ln.text, True) for ln in f.added]
+    merged.sort(key=lambda t: t[0])
+    return merged
+
+
+def _docstring_state_before(f: DiffFile, root: Path,
+                            lines: list[tuple[int, str, bool]]) -> str | None:
+    """Docstring opener in effect just before the first diff line.
+
+    A docstring can open *before* the first hunk (the module docstring), so
+    the diff alone cannot know that rows added inside it are prose (dogfood:
+    ecfab7f added the R9/R10/R11 rows mid-docstring). When the real file is
+    available — git modes, and stdin scans that run inside a repo — walk its
+    lines up to the first diff line and return the opener in effect. Returns
+    None for new files (their opener is added inside the diff) or when the
+    file is not readable; the walk then starts with no state, as before.
+
+    Caveat: the seed reads the *current* file, so scanning a diff whose
+    new-side version differs from the working tree (e.g. an old ``--range``)
+    can seed a wrong state; a file shorter than the prelude returns None
+    rather than guessing from a mismatched file.
+    """
+    if f.is_new or root is None:
+        return None
+    if not lines or lines[0][0] <= 1:
+        return None
+    path = root / f.path
+    if not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    prelude = text.splitlines()[: lines[0][0] - 1]
+    if len(prelude) < lines[0][0] - 1:
+        return None  # file does not cover the prelude: do not guess
+    in_doc = None
+    for ln in prelude:
+        _, in_doc = _code_only(ln, in_doc)
+    return in_doc
+
+
+def rule_missing_error_handling(f: DiffFile, root: Path) -> list[tuple]:
     if not f.path.endswith(".py"):
         return []
     out = []
-    for run in f.added_runs:
-        try_seen = False
-        in_doc = None
-        for ln in run:
-            code, in_doc = _code_only(ln.text, in_doc)
-            if not code.strip():
-                continue
-            if re.search(r"\btry\s*:", code):
-                try_seen = True
-            # the try block is over: later lines are unguarded again.
-            # \b (not \s*:) so BOTH bare 'except:' and typed 'except OSError:'
-            # close the scope (logged: R3 try-scope reset misses typed handlers)
-            if re.match(r"^\s*(except|finally)\b", code):
-                try_seen = False
-            if OPEN_RE.search(code) and "with" not in code and not try_seen:
-                out.append((
-                    "MEDIUM", "R3", f.path, ln.lineno,
-                    "open() called outside try/with — missing file-error handling",
-                    "use 'with open(...)' and catch FileNotFoundError/OSError",
-                ))
-            if JSON_LOADS_RE.search(code) and not try_seen:
-                out.append((
-                    "MEDIUM", "R3", f.path, ln.lineno,
-                    "json.loads() without a try — JSONDecodeError can crash",
-                    "wrap in try/except json.JSONDecodeError",
-                ))
-            if CONV_RE.search(code) and not try_seen:
-                out.append((
-                    "MEDIUM", "R3", f.path, ln.lineno,
-                    "int()/float() on a variable without a guard — ValueError risk",
-                    "validate the input or wrap in try/except ValueError",
-                ))
+    # walk the whole new-side file (context AND added) so a docstring or
+    # try: opened by an unchanged line still guards the added rows inside
+    # it; the file-backed seed covers openers that predate the first hunk
+    # (dogfood: ecfab7f added the R9/R10/R11 rows mid-docstring)
+    lines = _new_side_lines(f)
+    try_seen = False
+    in_doc = _docstring_state_before(f, root, lines)
+    for lineno, text, is_added in lines:
+        code, in_doc = _code_only(text, in_doc)
+        if not code.strip():
+            continue
+        if re.search(r"\btry\s*:", code):
+            try_seen = True
+        # the try block is over: later lines are unguarded again.
+        # \b (not \s*:) so BOTH bare 'except:' and typed 'except OSError:'
+        # close the scope (logged: R3 try-scope reset misses typed handlers)
+        if re.match(r"^\s*(except|finally)\b", code):
+            try_seen = False
+        if not is_added:
+            continue
+        if OPEN_RE.search(code) and "with" not in code and not try_seen:
+            out.append((
+                "MEDIUM", "R3", f.path, lineno,
+                "open() called outside try/with — missing file-error handling",
+                "use 'with open(...)' and catch FileNotFoundError/OSError",
+            ))
+        if JSON_LOADS_RE.search(code) and not try_seen:
+            out.append((
+                "MEDIUM", "R3", f.path, lineno,
+                "json.loads() without a try — JSONDecodeError can crash",
+                "wrap in try/except json.JSONDecodeError",
+            ))
+        if CONV_RE.search(code) and not try_seen:
+            out.append((
+                "MEDIUM", "R3", f.path, lineno,
+                "int()/float() on a variable without a guard — ValueError risk",
+                "validate the input or wrap in try/except ValueError",
+            ))
     return out
 
 def _substantive(text: str) -> bool:
@@ -560,9 +621,10 @@ def _code_only(t: str, in_doc: str | None) -> tuple[str, str | None]:
     content. Only '#' preceded by whitespace (or at line start) is a
     comment, so '#' inside a string literal is preserved.
 
-    Accepted heuristics: `in_doc` resets at each added-run boundary, so a
-    docstring split across a context line loses state; runtime triple-quoted
-    string assignments are treated as docstrings.
+    Accepted heuristics: runtime triple-quoted string assignments are treated
+    as docstrings; an opener outside the diff entirely (before the first
+    hunk) is covered only when the real file is available and matches the
+    scanned diff (see ``_docstring_state_before``).
     """
     if in_doc:
         # content line: skipped; an odd count of the opening delimiter closes
@@ -965,7 +1027,7 @@ def analyze(
             add(sev, rule, file, line, msg, sugg)
         for sev, rule, file, line, msg, sugg in rule_silent_failure(f):
             add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_missing_error_handling(f):
+        for sev, rule, file, line, msg, sugg in rule_missing_error_handling(f, root):
             add(sev, rule, file, line, msg, sugg)
         for sev, rule, file, line, msg, sugg in rule_duplicate_logic(f):
             add(sev, rule, file, line, msg, sugg)

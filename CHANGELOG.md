@@ -57,8 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 126 tests including process-style
-  output-value integration tests. all 126 should pass.
+- **Tests:** `_test_diff.py` — 132 tests including process-style
+  output-value integration tests. all 132 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 
@@ -74,8 +74,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   heuristics: only a matching delimiter closes a docstring block;
   `#` preceded by whitespace is a comment (so `#` inside string
   literals is preserved); runtime triple-quoted assignments are
-  treated as docstrings; a docstring split across a context line
-  resets its state.
+  treated as docstrings; docstring and try-scope state now carries
+  across context lines, and an opener entirely outside the diff is
+  covered by a file-backed seed when the file is available.
+
+- R3 lost docstring and try-scope state at every added-run boundary:
+  rows added inside a docstring whose opener was an unchanged context
+  line (or a `try:` above the run) were scanned as code. The rule now
+  walks the whole new-side file - context AND added lines in order
+  (the parser records new-side linenos for context lines) - so
+  docstring and try-scope state crosses unchanged lines. When the
+  real file is on disk, the opener is additionally seeded from the
+  file's lines before the first hunk, silencing rows added
+  mid-docstring even when the opener predates the diff entirely
+  (dogfood: ecfab7f's R9/R10/R11 rows, 1 finding -> 0).
 
 ## [0.0.0] — placeholder (never released)
 
