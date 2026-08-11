@@ -424,6 +424,12 @@ ACTIVE / RECENT ENTRIES
   FIX: image-resize entry and its now-empty ARCHIVED section removed from errors.txt entirely (recoverable via git history).
   STATUS: FIXED.
 
+[2026-08-11] AREA: README rewrite + GitHub repo description and topics optimization
+  ERROR: README is serviceable but not optimized for adoption (single badge, no quick-start, full CLI surface undocumented, no security/limits sections); the GitHub repo has no description and no topics, so it is undiscoverable
+  CAUSE: README grew organically through the build-out; repo metadata was never set when the repo went public
+  FIX: README rewritten (badge row, highlights, full CLI reference with exit codes and JSON shape, hooks + Claude/Cursor integration, plugins, security, limits, tests, companion tools); repo description set; 18 discoverability topics added (ai, ai-agents, agentic-ai, claude-code, cursor, copilot, code-quality, code-review, llm, pre-commit, git-hooks, python, security, static-analysis, quality-gate, developer-tools, cli, ai-generated-code).
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

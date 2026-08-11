@@ -2,19 +2,13 @@
 
 [![CI](https://github.com/vartiainen1/agent-diff-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/vartiainen1/agent-diff-gate/actions/workflows/ci.yml)
 
-**The pre-commit quality gate for AI-generated code.** A zero-dependency CLI
-that sits between your AI coding agent and `git commit`, scans the diff, and
-flags the churn / vulnerability patterns AI-generated code tends to produce —
-**before** the code reaches a pull request.
+**The pre-commit quality gate for AI-generated code.** A zero-dependency,
+stdlib-only CLI that sits between your AI coding agent and `git commit`,
+scans the diff, and flags the churn / vulnerability patterns AI-generated
+code tends to produce — **before** the code reaches a pull request.
 
-```sh
-python check_diff.py            # analyze the working-tree diff (pre-commit)
-python check_diff.py --staged   # analyze the index (git diff --cached)
-python check_diff.py --range main HEAD~5   # analyze a commit range
-git diff | python check_diff.py --stdin    # pipe any unified diff in
-```
-
-Exit: `0` gate passes, `1` findings at/above the threshold, `2` usage error.
+`v0.1.0` · MIT · Python 3.9+ · **zero dependencies** · fully offline — nothing
+leaves your machine.
 
 ---
 
@@ -24,11 +18,27 @@ CodeRabbit, Greptile and Qodo review PRs *after* they are pushed — and they
 need an LLM API, a subscription, and your code uploaded to their cloud.
 Semgrep / pre-commit SAST catches syntax-level patterns but not the
 *semantic* churn class AI agents produce: swallowed exceptions, unprotected
-conversions, re-implemented helpers, pasted blocks.
+conversions, re-implemented helpers, pasted blocks, secrets in new shapes.
 
 Agent Diff Gate is **local, free, offline, and deterministic** — a single
 stdlib Python file you can drop into any repo, with no network and no data
 leaving the machine.
+
+## Highlights
+
+- **14 built-in rules** — secrets, silent failures, missing error handling,
+  duplicate logic, ignored existing patterns, and 10 more (see below), plus
+  an **external plugin system** (`rules.d/`) so new rules never have to grow
+  the core file.
+- **Every diff source**: working tree, staged index, commit range, stdin, or
+  a saved diff file — pre-commit, pre-push, or in CI.
+- **Severity gate with real exit codes** — wire it into any script or hook:
+  `0` pass, `1` findings at/above your threshold, `2` usage error.
+- **Comment/docstring aware** — rules that scan code skip strings and
+  comments, so test fixtures and prose never produce noise.
+- **Hardened for untrusted input** — path containment, secret redaction,
+  control-character stripping, an 8 MiB input cap, and a no-traceback
+  boundary guard (see [Security](#security)).
 
 ## The fourteen built-in rules
 
@@ -50,40 +60,76 @@ leaving the machine.
 | R14 `sql-injection` | SQL built from f-strings, template literals, `.format()` or concatenation | HIGH |
 
 Every finding reports `file:line`, the rule, a plain-language message, and a
-concrete suggestion.
+concrete suggestion. Full semantics for each rule live in
+[Rules detail](#rules-detail).
 
-## Usage
+## Quick start
 
 ```sh
-# gate a diff (default: working tree)
-python check_diff.py
+# Install (or just copy check_diff.py into your repo — it's one file)
+pip install agent-diff-gate
+diff-gate --help
 
-# staged changes only
-python check_diff.py --staged
-
-# a commit range
-python check_diff.py --range main HEAD~3
-
-# from stdin or a saved diff file
-git diff | python check_diff.py --stdin
-python check_diff.py --file changes.diff
-
-# tune the gate
-python check_diff.py --fail-on medium    # fail on MEDIUM or worse (default: high)
-python check_diff.py --warn-only         # report but never fail
-python check_diff.py --rule R1,R3        # only these rules
-python check_diff.py --exclude '*.lock' --exclude 'vendor/*'
-python check_diff.py --json              # machine-readable output
-
-# no diff? just the working tree state check
-python check_diff.py --log               # validate errors.txt (repo discipline)
+# Gate your staged changes right now
+diff-gate --staged
 ```
 
-Example output:
+Single-file drop-in (no install at all):
 
+```sh
+cp check_diff.py /path/to/your/repo/
+python /path/to/your/repo/check_diff.py --staged
 ```
+
+Run it on every commit with the provided hooks (see
+[Hooks & agent integration](#hooks--agent-integration)).
+
+## Usage — the full CLI
+
+### 1. Pick a diff source (exactly one)
+
+| Flag | Reads |
+|------|-------|
+| *(none)* | the working tree (`git diff`) |
+| `--staged` | the index (`git diff --cached`) — the classic pre-commit mode |
+| `--range A B` | the commit range `A..B` |
+| `--stdin` | a unified diff piped in |
+| `--file PATH` | a saved diff file |
+
+### 2. Tune the gate
+
+| Flag | Effect |
+|------|--------|
+| `--fail-on SEV` | fail when a finding is at least this severity: `high` (default) / `medium` / `low` / `none` |
+| `--warn-only` | report findings but never fail (equivalent to `--fail-on none`) |
+| `--max-findings N` | cap findings reported (default 100; `0` = unlimited) |
+| `--rule R1,R3` | run only the listed rules (repeatable, comma-separated) |
+| `--exclude GLOB` | skip files matching a glob (repeatable, e.g. `*.lock` `vendor/*`) |
+| `--json` | machine-readable output (one JSON document: `gate` + `findings[]`) |
+| `--list-rules` | list every built-in and plugin rule, then exit |
+| `--rules-dir PATH` | load plugin rules from `PATH` instead of the default `rules.d/` |
+| `--version` | print the version and exit |
+
+### 3. Error-log tooling (this repo's log-before-fix discipline)
+
+| Flag | Effect |
+|------|--------|
+| `--log [PATH]` | validate the error log (default `errors.txt`) |
+| `--add --area A --error E --cause C [--status S]` | scaffold a new log entry |
+| `--has-entry AREA` | exit 0 only if `AREA` is already logged (gates a fix) |
+| `--check-commit MSG` | re-run the gate on a commit-message file |
+| `--archive-days N [--apply]` | preview/apply archiving of old FIXED entries |
+| `--lessons [--apply]` | distill CAUSE lines into `rules.txt` section 7 |
+| `--logfile PATH` | point log-tooling at a different file |
+
+**Exit codes:** `0` gate passes · `1` findings at/above the `--fail-on`
+threshold · `2` usage / environment error.
+
+### Example output
+
+```text
 === AGENT DIFF GATE — scan report ===
-source   : git diff (working tree)
+source   : git diff (staged)
 files    : 3 changed, 3 analyzed
 findings : 9 (4 HIGH, 5 MEDIUM)
 
@@ -96,33 +142,93 @@ findings : 9 (4 HIGH, 5 MEDIUM)
 GATE: FAIL — fail-on 'high', 9 finding(s)
 ```
 
-## Install
+With `--json`, the same scan is one document:
 
-**From PyPI** (zero dependencies, stdlib only):
-
-```sh
-pip install agent-diff-gate
-diff-gate --help        # the console command
+```json
+{"gate": "FAIL", "fail_on": "high",
+ "findings": [{"rule": "R1", "file": "src/auth.py", "line": 12,
+               "severity": "HIGH", "message": "...", "suggestion": "..."}]}
 ```
 
-**Or copy the single file** — the whole tool is one file:
+## Hooks & agent integration
+
+**Git hooks — hard enforcement for humans and agents alike:**
 
 ```sh
-cp check_diff.py /path/to/your/repo/
-python /path/to/your/repo/check_diff.py --staged
-```
-
-**Git hooks** (run the gate on every commit):
-
-```sh
-cp hooks/pre-commit-gate.sh .git/hooks/pre-commit    # blocks commits with findings
-cp hooks/git-commitmsg-hook.sh .git/hooks/commit-msg # log-before-fix AREA gate
+cp hooks/pre-commit-gate.sh .git/hooks/pre-commit      # blocks commits with findings
+cp hooks/git-commitmsg-hook.sh .git/hooks/commit-msg   # log-before-fix AREA gate
 chmod +x .git/hooks/pre-commit .git/hooks/commit-msg
 ```
 
-`./hooks/install.sh --git` installs both for you. For the full
-copy-into-any-project starter kit (CLAUDE.md, Claude Code hooks, Cursor
-rules), see `templates/README.md`.
+`./hooks/install.sh --git` installs both for you.
+
+**Claude Code / Cursor starter kit** — the repo ships a copy-into-any-project
+kit in `templates/` (see `templates/README.md`):
+
+| Piece | Copy to | Purpose |
+|---|---|---|
+| `CLAUDE.md` | repo root | Claude Code reads it every session |
+| `claude-settings.json` | `.claude/settings.json` | Claude Code runs the gate on every commit tool call |
+| `cursor-gate.mdc` | `.cursor/rules/gate.mdc` | Cursor always-on rule |
+| `hooks/block-no-verify-hook.sh` | `hooks/` | blocks `git commit --no-verify` bypasses |
+
+**CI backstop:** the `commit-gate` job in `.github/workflows/ci.yml`
+re-checks every pushed commit server-side, where `--no-verify` cannot reach.
+
+## Plugin rules (rules.d/)
+
+New rules no longer have to grow `check_diff.py`. Drop a module into
+`rules.d/` declaring `RULE_ID` / `RULE_NAME` / `SEVERITY` / `DESCRIPTION`
+(plus optional `SUGGESTION`) and a `rule_diff(f)` function, and it runs
+alongside the built-ins on every scan. Plugin rules respect `--rule`
+filtering, dedup, `--max-findings` and the severity gate like any built-in.
+A broken plugin is skipped with a warning — it never crashes the gate.
+
+```bash
+python check_diff.py --list-rules              # built-ins + plugins
+python check_diff.py --rules-dir /path/to/dir  # load rules from elsewhere
+```
+
+See `rules.d/_example_rule.py` (working template) and `rules.d/README.md`
+(the plugin contract).
+
+## Security
+
+The gate analyzes **untrusted input** (hostile diffs, third-party plugins),
+so it is hardened where it counts:
+
+- **Path containment** — diff-controlled paths are resolved and verified
+  inside the repo root; `..`, absolute paths, NUL bytes and escaping
+  symlinks are refused.
+- **No secret leakage** — credential-shaped strings are redacted from
+  findings before they reach the terminal or `--json`.
+- **No terminal injection** — control/bidi characters are stripped from
+  diff-derived text.
+- **Bounded input** — stdin/file reads are capped at 8 MiB (exit 2).
+- **No tracebacks in hooks** — a boundary guard turns unexpected errors
+  into a clean `GATE: internal error` message.
+- **Trust model** — plugins execute code: only add rules you trust. Diffs
+  are untrusted data. The tool is fully offline.
+
+Full details: [`SECURITY.md`](SECURITY.md). To report a vulnerability,
+follow the private-advisory path documented there — never a public issue.
+
+## Limits
+
+- **Heuristic linter, not a SAST scanner** — it can miss real
+  vulnerabilities and can report false positives. Treat findings as review
+  aids, not proof of security.
+- Scans diffs up to **8 MiB**; the gate is deterministic and offline.
+
+## Tests
+
+`python _test_diff.py` — **164 tests** covering the diff parser, all
+fourteen built-in rules + plugins (happy + negative + edge), the severity
+gate model, the error-log tooling, and process-style output-value
+integration tests. `all 164 should pass`. The suite runs on
+**Python 3.9 / 3.11 / 3.12 across Ubuntu and Windows** in CI, plus a
+packaging job that builds the wheel and smoke-tests the `diff-gate` console
+script.
 
 ## Rules detail
 
@@ -211,35 +317,12 @@ template literals with `${…}`, `.format()` on a query, or `+` concatenation
 inside an `execute`/`query` call. Parameterized queries (`%s` + param
 tuple, prepared statements) are not flagged.
 
-## Plugin rules (rules.d/)
-
-New rules no longer have to grow `check_diff.py`. Drop a module into
-`rules.d/` declaring `RULE_ID` / `RULE_NAME` / `SEVERITY` / `DESCRIPTION`
-(plus optional `SUGGESTION`) and a `rule_diff(f)` function, and it runs
-alongside the built-ins on every scan. Plugin rules respect `--rule`
-filtering, dedup, `--max-findings` and the severity gate like any built-in.
-A broken plugin is skipped with a warning — it never crashes the gate.
-
-```bash
-python check_diff.py --list-rules              # built-ins + plugins
-python check_diff.py --rules-dir /path/to/dir  # load rules from elsewhere
-```
-
-See `rules.d/_example_rule.py` (working template) and `rules.d/README.md`
-(the plugin contract).
-
 ## Error-log discipline (this repo)
 
 This repo uses the **agent error-log system**: every error encountered is
-logged in `errors.txt` BEFORE it is fixed (enforced by `git-commitmsg-hook.sh`).
-Session notes live in `notes.txt`, distilled lessons in `rules.txt`. Run
-`python start.py` at the start of a session.
-
-## Tests
-
-`python _test_diff.py` — 164 tests covering the diff parser, all fourteen built-in rules + plugins
-(happy + negative + edge), the gate model, the error-log tooling, and
-process-style output-value integration tests. all 164 should pass.
+logged in `errors.txt` BEFORE it is fixed (enforced by
+`git-commitmsg-hook.sh`). Session notes live in `notes.txt`, distilled
+lessons in `rules.txt`. Run `python start.py` at the start of a session.
 
 ## Companion tools
 
@@ -249,6 +332,9 @@ This repo is the third member of the agent-memory family:
 - **agent-decision-log** — proactive memory: what was CHOSEN and why
 - **agent-log-ai** — reasoning: distills lessons from both logs
 
-## License
+## Contributing & license
 
-MIT.
+- **License:** MIT — see [`LICENSE`](LICENSE).
+- **Changes:** [`CHANGELOG.md`](CHANGELOG.md) (Keep a Changelog / SemVer).
+- **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- **Security:** [`SECURITY.md`](SECURITY.md).
