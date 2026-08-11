@@ -496,6 +496,17 @@ ACTIVE / RECENT ENTRIES
        decision-log, log-ai) gained the same ledger via PRs, each logged in its own log.
   STATUS: FIXED.
 
+[2026-08-11] AREA: squash-merge (#NN) suffix breaks the commit gate in diff-gate too
+  ERROR: extract_area (and the hook sed) strip trailing punctuation but not the
+         PR-number group GitHub appends to squash-merge titles, so a merged
+         commit "... (AREA: x) (#NN)" extracts "x) (#NN" and blocks --check-commit
+  CAUSE: the same gap found in the siblings; diff-gate CI runs the same gate on
+         push (git log -1 | --check-commit), so a squash-merged PR would fail
+  FIX: extract_area and git-commitmsg-hook.sh now strip a trailing "(#NN)"
+       group (GitHub squash-merge suffix) before the punctuation strip, pinned
+       by a test; --check-commit passes on a squash-merged message shape.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

@@ -1799,6 +1799,7 @@ class TestLogTooling(unittest.TestCase):
 
     def test_extract_area(self):
         self.assertEqual(cd.extract_area("fix thing (AREA: the bug)"), "the bug")
+        self.assertEqual(cd.extract_area("fix thing (AREA: the bug) (#31)"), "the bug")
         self.assertEqual(cd.extract_area("no marker here"), "")
         self.assertEqual(cd.extract_area("docs only"), "")
 

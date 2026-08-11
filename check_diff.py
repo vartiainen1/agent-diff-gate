@@ -1548,6 +1548,7 @@ def extract_area(msg: str) -> str:
     if not m:
         return ""
     area = m.group(1)
+    area = re.sub(r"\s*\(\s*#\d+\s*\)\s*$", "", area)  # GitHub squash-merge '(#NN)' suffix
     area = re.sub(r"[),.;:]+[ \t]*$", "", area).strip()
     return area
 
