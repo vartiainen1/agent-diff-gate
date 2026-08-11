@@ -119,6 +119,13 @@ ACTIVE / RECENT ENTRIES
   STATUS: FIXED.
 
 ================================================================================
+
+[2026-08-11] AREA: stray hooks/_check_readme_count.py copied from agent-error-log during scaffold
+  ERROR: the old drift guard (points at _test_errors.py) was swept into hooks/ by git add -A and committed
+  CAUSE: scaffold cp command copied agent-error-log/_check_readme_count.py into the new repo hooks/ folder; the real drift guard lives at the repo root
+  FIX: 
+  STATUS: OPEN.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 
