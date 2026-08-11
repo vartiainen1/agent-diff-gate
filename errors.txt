@@ -340,6 +340,12 @@ ACTIVE / RECENT ENTRIES
        are real handlers / RULE_INFO strings / docs prose.
   STATUS: FIXED.
 
+[2026-08-11] AREA: R11 bare-marker over-fire - prose mentions fire, incl. the rule's own docstring + RULE_INFO strings (dogfood: 15 findings, 0 genuine)
+  ERROR: TODO_MARKER_RE matches any bare \bTODO\b mention, so prose that merely names the markers fires: the rule's own module docstring, RULE_INFO descriptions, README/CHANGELOG rows, error-log and notes prose, test fixture text
+  CAUSE: R11 scans added lines raw (deliberately - markers live in comments) but the marker regex has no shape requirement; 'TODO/FIXME/XXX/HACK markers' is indistinguishable from 'TODO: fix'
+  FIX: tightened TODO_MARKER_RE to the annotation shape (MARKER:/MARKER(/bare-at-EOL with a quote/backtick lookbehind); R11 stays the deliberate exception to the comment-stripping sweep - markers live in comments, so added lines are still scanned raw. Dogfood: 15 -> 2 on full history (both genuine); working-tree self-triggers 10 -> 0 prose.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

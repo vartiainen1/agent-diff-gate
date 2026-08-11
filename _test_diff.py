@@ -1274,6 +1274,85 @@ class TestRules(unittest.TestCase):
         finds = findings_for(d, "R11")
         self.assertEqual([f for f in finds if f.rule == "R11"], [])
 
+    def test_r11_prose_mention_in_docstring_ok(self):
+        # dogfood class: prose that merely names the markers (rule docstrings,
+        # README rows, RULE_INFO) must not fire - only the annotation shape counts
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++    """R11: TODO/FIXME/XXX/HACK markers left in added lines.
++    Unfinished work should be tracked, not committed silently.
++    """
+'''
+        finds = findings_for(d, "R11")
+        self.assertEqual([f for f in finds if f.rule == "R11"], [])
+
+    def test_r11_prose_mention_in_trailing_comment_ok(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++x = 1  # the TODO list lives in issues.md
+"""
+        finds = findings_for(d, "R11")
+        self.assertEqual([f for f in finds if f.rule == "R11"], [])
+
+    def test_r11_bare_marker_without_colon_ok(self):
+        # documented tradeoff: colon-less '# TODO handle' is not flagged -
+        # the : / ( shapes cover the dominant convention without prose noise
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++# TODO handle this without a colon
+"""
+        finds = findings_for(d, "R11")
+        self.assertEqual([f for f in finds if f.rule == "R11"], [])
+
+    def test_r11_owner_tag_and_all_variants_fire(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,6 @@
+ ok
++# TODO(jsmith): fix the retry loop
++# FIXME: returns None on empty
++# XXX: leaks the connection
++# HACK: sleeps to dodge the race
+"""
+        finds = findings_for(d, "R11")
+        fired = [f for f in finds if f.rule == "R11"]
+        self.assertEqual(len(fired), 4)
+
+    def test_r11_backtick_quoted_mention_ok(self):
+        # reviewer: docs write rule names backtick-wrapped - "`TODO:`" is a
+        # mention, not an annotation (the lookbehind guard)
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++use the `TODO:` annotation shape in comments
+"""
+        finds = findings_for(d, "R11")
+        self.assertEqual([f for f in finds if f.rule == "R11"], [])
+
+    def test_r11_bare_marker_at_eol_fires(self):
+        # the \s*$ branch: a bare marker at end-of-line is still an annotation
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++# TODO
+"""
+        finds = findings_for(d, "R11")
+        self.assertTrue(any(f.rule == "R11" for f in finds))
+
     def test_r10_inline_swallow_left_to_r2(self):
         # regression (reviewer): one-line 'except Exception: pass' is R2's
         # terrain - R10 must not double-fire on it

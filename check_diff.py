@@ -298,7 +298,7 @@ PATH_VAR_ARG_RE = re.compile(r"\b(?:Path|open)\s*\(\s*([A-Za-z_][\w]*)\s*\)")
 BROAD_EXCEPT_RE = re.compile(r"\bexcept\s+(?:BaseException|Exception)\b")
 # R11: unfinished-work markers in added lines
 # uppercase-only: lowercase todo/hack/xxx are common identifiers
-TODO_MARKER_RE = re.compile(r"\b(?:TODO|FIXME|XXX|HACK)\b")
+TODO_MARKER_RE = re.compile(r"(?<![\x60\x27\x22])\b(?:TODO|FIXME|XXX|HACK)\b(?=:|\(|\s*$)")  # annotation shape only: MARKER:/MARKER(/bare-at-EOL; quote/backtick-wrapped mentions are data, not markers
 
 
 
@@ -824,7 +824,18 @@ def rule_broad_exception(f: DiffFile, root: Path) -> list[tuple]:
     return out
 
 def rule_todo_markers(f: DiffFile) -> list[tuple]:
-    """R11: TODO/FIXME/XXX/HACK markers left in added lines = unfinished work."""
+    """R11: TODO/FIXME/XXX/HACK markers left in added lines = unfinished work.
+
+    Deliberate exception to the R3/R7/R9/R10 comment-stripping sweep: marker
+    annotations live IN comments and docstrings, so this rule intentionally
+    scans added lines raw (comments + docstrings stay visible) - stripping
+    them would silence its own signal. Instead TODO_MARKER_RE demands the
+    annotation shape (MARKER-colon, MARKER(owner): owner tag, or a bare
+    marker at end-of-line; a marker wrapped in quotes/backticks is data, not
+    an annotation) so prose that merely names the markers never fires - the
+    rule's own docstring, RULE_INFO strings, README/CHANGELOG rows, log
+    prose (dogfood: 15 findings, none genuine).
+    """
     out = []
     for ln in f.added:
         if TODO_MARKER_RE.search(ln.text):

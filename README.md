@@ -176,6 +176,10 @@ swallow-shapes (`except Exception: pass` / lone `pass` body) are left to R2.
 ### R11 — TODO/FIXME markers (LOW)
 `TODO` / `FIXME` / `XXX` / `HACK` markers left in added lines — the diff
 contains unfinished work that should be tracked, not committed silently.
+Only the annotation shape counts (`TODO:` / `FIXME:` / `XXX:` / `HACK:` /
+`TODO(user):` owner tags, or a bare marker at end-of-line) — prose that merely
+*mentions* the markers is not flagged. Unlike R3/R7/R9/R10, this rule
+deliberately still scans comments and docstrings: marker annotations live there.
 
 ### R12 — hardcoded config credentials (HIGH)
 Connection strings with embedded credentials (`postgres://user:pass@…`,
@@ -222,9 +226,9 @@ Session notes live in `notes.txt`, distilled lessons in `rules.txt`. Run
 
 ## Tests
 
-`python _test_diff.py` — 145 tests covering the diff parser, all fourteen built-in rules + plugins
+`python _test_diff.py` — 151 tests covering the diff parser, all fourteen built-in rules + plugins
 (happy + negative + edge), the gate model, the error-log tooling, and
-process-style output-value integration tests. all 145 should pass.
+process-style output-value integration tests. all 151 should pass.
 
 ## Companion tools
 

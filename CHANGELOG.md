@@ -57,8 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 145 tests including process-style
-  output-value integration tests. all 145 should pass.
+- **Tests:** `_test_diff.py` — 151 tests including process-style
+  output-value integration tests. all 151 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 
@@ -117,6 +117,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   real handlers in the tool's own code, RULE_INFO strings, and docs
   prose (the pre-existing docs self-trigger class).
 
+- **R11 (todo-marker):** the marker regex now demands the annotation shape
+  (`TODO:` / `FIXME:` / `XXX:` / `HACK:` / `TODO(user):` owner tags / bare
+  marker at end-of-line) — prose that merely *mentions* the markers no longer
+  fires. R11 stays a **deliberate exception** to the R3/R7/R9/R10
+  comment-stripping sweep: marker annotations live in comments and docstrings,
+  so this rule still scans added lines raw. Dogfood: 15 findings -> 2 genuine.
 ## [0.0.0] — placeholder (never released)
 
 - Repository scaffolding only.
