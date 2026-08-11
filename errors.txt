@@ -316,6 +316,17 @@ ACTIVE / RECENT ENTRIES
        corrupt state. 5 new tests, 137 green, drift guard OK.
   STATUS: FIXED.
 
+[2026-08-11] AREA: R9 raw-line scanning - no comment/docstring awareness, docstring prose and trailing comments fire (mirror of R3/R7)
+  ERROR: R9 scans added lines raw: docstring prose mentioning Path(input(...)) or open(input(...)) fires, and trailing '# ... Path(input(...))' comments on code lines fire because only a full-line _looks_commented() startswith check exists
+  CAUSE: rule_missing_path_validation matches on ln.text with no docstring state machine and no comment stripping; the file-backed seed and _code_only() pipeline R3/R7 now use is absent
+  FIX: R9 now walks the whole new-side file through _code_only() with
+       the file-backed opener seed (mirror of R3/R7); no try state -
+       try/except does not validate a path. Docstring prose, one-line
+       docstrings, and trailing comments no longer fire. 4 new tests,
+       141 green, drift guard OK. Dogfood: full-history R9 5 -> 0 (all
+       five were string-literal fixture content).
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

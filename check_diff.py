@@ -753,36 +753,44 @@ def rule_dangerous_eval_exec(f: DiffFile) -> list[tuple]:
 
 
 
-def rule_missing_path_validation(f: DiffFile) -> list[tuple]:
+def rule_missing_path_validation(f: DiffFile, root: Path) -> list[tuple]:
     """R9 (Python): a path built straight from user-controlled input can be a
     path-traversal vector - flag the raw sources, not every Path() call."""
     if not f.path.endswith(".py"):
         return []
     out = []
-    # note: R3 may also fire on a bare open() on the same line - different
-    # signals (missing error handling vs path traversal), both useful
-    for ln in f.added:
-        t = ln.text
-        if _looks_commented(t):
+    # walk the whole new-side file through _code_only() so comments and
+    # docstring content (incl. prose rows and one-line docstrings) never
+    # fire, with the file-backed opener seed (mirror of R3/R7). No try
+    # scope: wrapping a path in try/except does not validate it, so R9
+    # has no try state to carry. Note: R3 may also fire on a bare open()
+    # on the same line - different signals (missing error handling vs
+    # path traversal), both useful. Tradeoff: a docstring left open by
+    # the diff (closer outside the hunks) swallows later added lines -
+    # the same accepted heuristic as R3/R7.
+    lines = _new_side_lines(f)
+    in_doc = _docstring_state_before(f, root, lines)
+    for lineno, text, is_added in lines:
+        code, in_doc = _code_only(text, in_doc)
+        if not code.strip() or not is_added:
             continue
         hit = None
-        if re.search(PATH_OF_RAW_RE, t):
+        if re.search(PATH_OF_RAW_RE, code):
             hit = "raw input (input()/sys.argv/os.environ)"
-        elif re.search(PATH_OF_REQ_RE, t):
+        elif re.search(PATH_OF_REQ_RE, code):
             hit = "request/query/body data"
         else:
-            m = PATH_VAR_ARG_RE.search(t)
+            m = PATH_VAR_ARG_RE.search(code)
             if m and re.search(r"input", m.group(1), re.I):
                 hit = "'" + m.group(1) + "'"
         if hit:
             out.append((
-                "MEDIUM", "R9", f.path, ln.lineno,
+                "MEDIUM", "R9", f.path, lineno,
                 f"file path built from user-controlled input ({hit}) - "
                 f"path-traversal risk",
                 DEFAULT_SUGGEST[R9_NAME],
             ))
     return out
-
 
 def rule_broad_exception(f: DiffFile) -> list[tuple]:
     """R10: catch-all handlers (except Exception / BaseException). The
@@ -1057,7 +1065,7 @@ def analyze(
             add(sev, rule, file, line, msg, sugg)
         for sev, rule, file, line, msg, sugg in rule_dangerous_eval_exec(f):
             add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_missing_path_validation(f):
+        for sev, rule, file, line, msg, sugg in rule_missing_path_validation(f, root):
             add(sev, rule, file, line, msg, sugg)
         for sev, rule, file, line, msg, sugg in rule_broad_exception(f):
             add(sev, rule, file, line, msg, sugg)

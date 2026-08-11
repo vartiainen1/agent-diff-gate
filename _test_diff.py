@@ -1059,7 +1059,71 @@ class TestRules(unittest.TestCase):
         finds = findings_for(d, "R9")
         self.assertEqual([f for f in finds if f.rule == "R9"], [])
 
-    # --- R10 broad exception handlers -----------------------------------
+    def test_r9_docstring_prose_skipped(self):
+        # docstring prose mentioning the patterns is not code (mirror of
+        # the R3/R7 docstring refinement)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,7 @@
+ ok
++def load_path():
++    """Builds Path(input("file")) and open(sys.argv[0]) paths.
++    Sanitized before use.
++    """
++    pass
++p = Path(input("file: "))
+'''
+        finds = findings_for(d, "R9")
+        # docstring lines (3-5) stay silent...
+        self.assertEqual([f for f in finds if f.line in (3, 4, 5)], [])
+        # ...the real path-from-input after the docstring is still flagged
+        self.assertTrue(any(f.line == 7 for f in finds))
+
+    def test_r9_one_line_docstring_skipped(self):
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++    """Builds Path(input("f")) for the user."""
+'''
+        finds = findings_for(d, "R9")
+        self.assertEqual([f for f in finds if f.rule == "R9"], [])
+
+    def test_r9_trailing_comment_skipped(self):
+        # a trailing comment mentioning the pattern is not code: the '#'
+        # strip must remove it before matching (regression: raw-line scan
+        # fired on the comment text)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++x = 1  # Path(input("f")) is sanitized upstream
++p = Path(input("file: "))
+'''
+        finds = findings_for(d, "R9")
+        self.assertEqual([f for f in finds if f.line == 2], [])
+        self.assertTrue(any(f.line == 3 for f in finds))
+
+    def test_r9_docstring_opener_in_context_silenced(self):
+        # the docstring opener is an unchanged context line: added prose
+        # rows inside it are not code (mirror of R3's context fix)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,4 @@
+ """
++R9 reads Path(input("port")) from the user.
++R9 opens sys.argv[1] without checks.
++R9 maps request.files paths directly.
+ """
+'''
+        finds = findings_for(d, "R9")
+        self.assertEqual([f for f in finds if f.rule == "R9"], [])
+
+    # --- R10 broad exception handlers ------------------------------------
     def test_r10_broad_except_with_body(self):
         d = """diff --git a/x.py b/x.py
 --- a/x.py

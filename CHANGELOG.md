@@ -57,8 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 137 tests including process-style
-  output-value integration tests. all 137 should pass.
+- **Tests:** `_test_diff.py` — 141 tests including process-style
+  output-value integration tests. all 141 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 
@@ -97,6 +97,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   context lines, file-backed opener seed - mirror of R3) plus a
   whitespace-guarded // strip for JS trailing comments and the
   _looks_commented() guard for full-line /* and * comment lines.
+
+- R9 scanned raw added lines: docstring prose and trailing comments
+  mentioning Path(input(...))/open(input(...)) fired. The rule now
+  walks the whole new-side file through _code_only() with the
+  file-backed opener seed (mirror of R3/R7). No try state: wrapping
+  a path in try/except does not validate it, so R9 intentionally
+  has none. Dogfood: full-history R9 findings 5 -> 0 (all five were
+  string-literal fixture content, correctly silenced).
 
 ## [0.0.0] — placeholder (never released)
 
