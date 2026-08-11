@@ -61,9 +61,9 @@ machine.
 - **Hardened for untrusted input** — path containment, secret redaction,
   control-character stripping, an 8 MiB input cap, and a no-traceback
   boundary guard (see [Security](#security)).
-- **Measured performance** — linear scan: ~0.4 s per 10k diff lines
-  (200-file benchmark), ~1.2 s at 30k lines — fast enough to run on every
-  commit without slowing anyone down.
+- **Measured performance** — linear scan: ~0.5 s per 10k diff lines
+  (200-file benchmark, interpreter startup included), ~1.4 s at 30k —
+  fast enough to run on every commit without slowing anyone down.
 
 ## The fourteen built-in rules
 
