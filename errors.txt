@@ -507,6 +507,15 @@ ACTIVE / RECENT ENTRIES
        by a test; --check-commit passes on a squash-merged message shape.
   STATUS: FIXED.
 
+[2026-08-11] AREA: dogfood ledger refresh - squash-merge (#NN) fix round
+  ERROR: the Dogfood ledger row went stale after the squash-merge (#NN) fix
+         (new commits, larger scan window)
+  CAUSE: the gate scans initial commit -> HEAD, so the fix commits grew the
+         window; findings unchanged (194: R4 x103 / R8 x20 / R13 x13 / ...)
+  FIX: refreshed the ledger row (39 -> 42 commits, ~5,700 lines). Findings
+       unchanged at 194 - the squash-merge (#NN) fix added zero findings.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 
