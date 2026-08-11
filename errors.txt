@@ -418,6 +418,12 @@ ACTIVE / RECENT ENTRIES
   FIX: ran check_diff.py --lessons --apply (it appends a second section when the replace-anchor does not match the "4) LESSONS LEARNED" layout); merged into one section 7 - the distilled CAUSE-keyword signal line first, then all curated prose bullets preserved below (keep+append, per user).
   STATUS: FIXED.
 
+[2026-08-11] AREA: remove archived image-resize example entry from errors.txt
+  ERROR: the image-resize entry (scaffold template filler from the agent-error-log era) still lives in the ARCHIVED section as the only entry there - user wants it fully deleted
+  CAUSE: it was archived verbatim to preserve its pending status, but it is not this project's issue and the section is empty apart from it
+  FIX: image-resize entry and its now-empty ARCHIVED section removed from errors.txt entirely (recoverable via git history).
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 
@@ -427,15 +433,6 @@ EXAMPLE ENTRIES (replace with your own; delete this section header)
          instead of defaulting
   FIX: use payload.get('amount', 0) and guard None before .strip()
   STATUS: FIXED.
-
-================================================================================
-ARCHIVED ENTRIES (FIXED, moved by check_diff.py --archive-days)
-
-[2026-08-07] AREA: image resize service timeouts
-  ERROR: resize job hangs for >60s on 50MP inputs
-  CAUSE: Pillow opens the full image into memory before resizing
-  FIX: (pending — use progressive downscaling / streaming resize)
-  STATUS: OPEN.
 
 ================================================================================
 5) TO ADD A NEW ENTRY
