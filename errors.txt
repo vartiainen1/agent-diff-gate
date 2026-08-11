@@ -388,6 +388,12 @@ ACTIVE / RECENT ENTRIES
   FIX: rule_duplicate_logic now scans code files only (R4_CODE_EXTS + R4_CODE_NAMES for extension-less files like Dockerfile/Makefile) and walks the new-side file through _code_only() with the file-backed seed (the R3/R7/R9/R10 pipeline) - triple-quoted fixture/template content and comments never fire. All built-in rules normalized to (f, root); analyze() dispatches via a BUILTIN_RULES loop (removes the dispatcher's own 14x duplicated call block). Dogfood: 228 -> 171, remaining hits verified as real code; 161 -> 164 tests.
   STATUS: FIXED.
 
+[2026-08-11] AREA: v0.1.0 first release cut - CHANGELOG versioned, tag + GitHub push pending
+  ERROR: repo never had a tag, no GitHub remote, CI never run - the tool is feature-complete (164 tests) but unpublished
+  CAUSE: release.yml tags from the CHANGELOG's first semver header; nothing was versioned so the workflow had nothing to fire on
+  FIX: 
+  STATUS: OPEN.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 
