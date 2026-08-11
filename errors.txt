@@ -454,6 +454,12 @@ ACTIVE / RECENT ENTRIES
   FIX: assets/demo.gif regenerated at true 16:9 (1280x720) with a larger font (19px), tightened blank-line spacing, and a 96-color quantized palette - 133 KB -> 94 KB, sharper text, same real captured output.
   STATUS: FIXED.
 
+[2026-08-11] AREA: demo-pass.gif - second GIF showing a PASSING scan (clean diff) for contrast
+  ERROR: the README demo shows only the failing case; adopters do not see that clean code passes instantly, which is half the value proposition
+  CAUSE: the live demo was built around the 'gate refuses bad code' story; the passing side was never captured
+  FIX: assets/demo-pass.gif (13.6 KB, 1280x720 16:9, green GATE: PASS) rendered from REAL output of a clean scan (parameterized SQL, no secrets, no swallows - 0 findings); README Live demo is now a Failing-vs-Passing side-by-side table.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

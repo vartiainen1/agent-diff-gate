@@ -18,9 +18,16 @@ leaves your machine.
 
 ## Live demo
 
-![Agent Diff Gate in action — a real scan catching a leaked API key, swallowed exceptions, and a SQL-injection risk](assets/demo.gif)
+The gate refuses a bad diff — and lets a clean one straight through. Both
+animations are **real output** from the same tiny demo repo, before and
+after the classic AI-agent mistakes (a leaked API key, swallowed
+exceptions, SQL built from strings) were fixed:
 
-The animation is **real output**: `check_diff.py` scanning a tiny demo repo that repeats three classic AI-agent mistakes. Run it on your own diff in [Quick start](#quick-start).
+| Failing scan | Passing scan |
+|---|---|
+| ![Agent Diff Gate catching a leaked API key, swallowed exceptions, and a SQL-injection risk](assets/demo.gif) | ![Agent Diff Gate passing a clean diff](assets/demo-pass.gif) |
+
+Run it on your own diff in [Quick start](#quick-start).
 
 ---
 
