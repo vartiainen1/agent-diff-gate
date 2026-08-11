@@ -17,8 +17,8 @@ SESSION NOTE (2026-08-11): agent-diff-gate v0.1.0 BUILT — first session
 - Dogfooding caught 3 real bugs, all logged in errors.txt before fixing:
   R3 try-scope never reset after except; R5 ignored the diff's own context
   lines in offline mode; R3 reset regex missed typed except handlers.
-- 78 tests green (parser + rules + gate + log tooling + process-style
-  output-value integration). README count 78 verified by the drift guard.
+- 92 tests green (parser + rules + gate + log tooling + process-style
+  output-value integration). README count 92 verified by the drift guard.
 - Kit shipped: README, rules.txt, errors.txt, notes.txt, CHANGELOG,
   AGENTS.md, pyproject.toml, SECURITY, CONTRIBUTING, CoC, LICENSE, hooks/
   installer + commit-msg hook, CI + release + publish workflows, start.py.
@@ -36,8 +36,16 @@ SESSION NOTE (2026-08-11): R6-R8 added - three new rules
   int(input(...)) / parseInt(req.query...) without a guard, try-aware like
   R3. R8 dangerous-eval-exec (MEDIUM): eval/exec/compile + new Function +
   subprocess shell=True; (?<![\w.]) keeps re.compile / .exec clean.
-- 16 new tests (positive + negative + process integration) -> 78 green.
+- 30 new tests (positive + negative + process integration) -> 92 green.
   Counts synced in README/CHANGELOG/CONTRIBUTING/AGENTS/notes/rules.
+- Review round (logged before fixing): R11 markers uppercase-only (lowercase
+  todo/hack/xxx are identifiers), R9 sources narrowed (request/req/event;
+  name heuristic = 'input' only; f-string), R10 inline-swallow test added.
+  Dogfood verified live: --range, --staged, default-gate interplay.
+- Round 3 (user request): R9 missing-path-validation (Path/open from
+  input/argv/request), R10 broad-exception (except Exception/BaseException;
+  R2 keeps the swallow-shapes), R11 todo-marker (TODO/FIXME/XXX/HACK).
+  Logged in errors.txt before coding; 11 new tests; dogfood verified live.
 - Code review round (all findings logged in errors.txt before fixing): R7 JS
   try-scope reset on '} catch', R8 multi-line shell=True + def-not-flagged,
   R6 message slice cleanup. Dogfood verified against a real repo: --range,

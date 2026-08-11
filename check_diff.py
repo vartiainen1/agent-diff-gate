@@ -11,6 +11,9 @@ the churn / vulnerability patterns AI-generated code tends to produce:
   R6 hardcoded-url           http(s):// endpoints baked into code (LOW)
   R7 missing-input-validation  int(input(...)) / parseInt(req.query...) raw (MEDIUM)
   R8 dangerous-eval-exec     eval()/exec()/compile()/new Function/shell=True (MEDIUM)
+  R9 missing-path-validation  Path()/open() from input/request/argv (Python, MEDIUM)
+  R10 broad-exception        except Exception/BaseException catches everything (MEDIUM)
+  R11 todo-marker            TODO/FIXME/XXX/HACK markers in added lines (LOW)
 
 Stdlib only, zero dependencies, works offline. Run from a git repo:
 
@@ -193,6 +196,9 @@ R5_NAME = "ignores-existing"
 R6_NAME = "hardcoded-url"
 R7_NAME = "missing-input-validation"
 R8_NAME = "dangerous-eval-exec"
+R9_NAME = "missing-path-validation"
+R10_NAME = "broad-exception"
+R11_NAME = "todo-marker"
 
 RULES = {
     "R1": R1_NAME,
@@ -203,6 +209,9 @@ RULES = {
     "R6": R6_NAME,
     "R7": R7_NAME,
     "R8": R8_NAME,
+    "R9": R9_NAME,
+    "R10": R10_NAME,
+    "R11": R11_NAME,
 }
 
 SECRET_PATTERNS = [
@@ -265,6 +274,18 @@ SUBPROCESS_CALL_RE = re.compile(
 )
 SHELL_TRUE_RE = re.compile(r"\bsubprocess\.(?:run|Popen|call|check_call|check_output)\s*\(.*\bshell\s*=\s*True\b")
 
+
+# R9: file paths built from user-controlled input (Python)
+PATH_OF_RAW_RE = re.compile(r"\b(?:Path|open)\s*\(\s*(?:input\s*\(|sys\.argv|os\.environ)")
+PATH_OF_REQ_RE = re.compile(r"\b(?:Path|open)\s*\(\s*(?:request|req|event)\.")
+PATH_VAR_ARG_RE = re.compile(r"\b(?:Path|open)\s*\(\s*([A-Za-z_][\w]*)\s*\)")
+# R10: catch-all exception handlers (R2 owns the swallow-shapes)
+BROAD_EXCEPT_RE = re.compile(r"\bexcept\s+(?:BaseException|Exception)\b")
+# R11: unfinished-work markers in added lines
+# uppercase-only: lowercase todo/hack/xxx are common identifiers
+TODO_MARKER_RE = re.compile(r"\b(?:TODO|FIXME|XXX|HACK)\b")
+
+
 DEFAULT_SUGGEST = {
     R1_NAME: "load secrets from environment / a secret store; never commit tokens",
     R2_NAME: "let the error surface (log + re-raise) or handle it; do not swallow it",
@@ -274,6 +295,9 @@ DEFAULT_SUGGEST = {
     R6_NAME: "move the endpoint to configuration / an environment variable",
     R7_NAME: "validate the input first and handle conversion errors (try/except ValueError, Number.isNaN)",
     R8_NAME: "avoid executing strings as code; prefer ast.literal_eval / json.loads / a parser, or sanitize strictly",
+    R9_NAME: "validate the path against an allowlist base directory and reject traversal (../)",
+    R10_NAME: "catch specific exceptions (ValueError, OSError, ...) and re-raise or log",
+    R11_NAME: "finish the work or track it in an issue; do not commit markers",
 }
 
 
@@ -565,6 +589,75 @@ def rule_dangerous_eval_exec(f: DiffFile) -> list[tuple]:
     return out
 
 
+
+def rule_missing_path_validation(f: DiffFile) -> list[tuple]:
+    """R9 (Python): a path built straight from user-controlled input can be a
+    path-traversal vector - flag the raw sources, not every Path() call."""
+    if not f.path.endswith(".py"):
+        return []
+    out = []
+    # note: R3 may also fire on a bare open() on the same line - different
+    # signals (missing error handling vs path traversal), both useful
+    for ln in f.added:
+        t = ln.text
+        if _looks_commented(t):
+            continue
+        hit = None
+        if re.search(PATH_OF_RAW_RE, t):
+            hit = "raw input (input()/sys.argv/os.environ)"
+        elif re.search(PATH_OF_REQ_RE, t):
+            hit = "request/query/body data"
+        else:
+            m = PATH_VAR_ARG_RE.search(t)
+            if m and re.search(r"input", m.group(1), re.I):
+                hit = "'" + m.group(1) + "'"
+        if hit:
+            out.append((
+                "MEDIUM", "R9", f.path, ln.lineno,
+                f"file path built from user-controlled input ({hit}) - "
+                f"path-traversal risk",
+                DEFAULT_SUGGEST[R9_NAME],
+            ))
+    return out
+
+
+def rule_broad_exception(f: DiffFile) -> list[tuple]:
+    """R10: catch-all handlers (except Exception / BaseException). The
+    swallow-shapes (pass / continue / break bodies) stay R2's HIGH terrain."""
+    out = []
+    for run in f.added_runs:
+        for i, ln in enumerate(run):
+            t = ln.text
+            if _looks_commented(t):
+                continue
+            m = BROAD_EXCEPT_RE.search(t)
+            if not m:
+                continue
+            if re.search(r":\s*(pass|\.\.\.|continue|break)\b", t[m.end():]):
+                continue
+            nxt = run[i + 1].text if i + 1 < len(run) else ""
+            if re.match(r"^\s*(pass|\.\.\.|continue|break)\s*$", nxt):
+                continue
+            out.append((
+                "MEDIUM", "R10", f.path, ln.lineno,
+                "overly broad exception handler catches every Exception type",
+                DEFAULT_SUGGEST[R10_NAME],
+            ))
+    return out
+
+
+def rule_todo_markers(f: DiffFile) -> list[tuple]:
+    """R11: TODO/FIXME/XXX/HACK markers left in added lines = unfinished work."""
+    out = []
+    for ln in f.added:
+        if TODO_MARKER_RE.search(ln.text):
+            out.append((
+                "LOW", "R11", f.path, ln.lineno,
+                "TODO/FIXME marker left in an added line - unfinished work",
+                DEFAULT_SUGGEST[R11_NAME],
+            ))
+    return out
+
 # ===========================================================================
 # analysis + output
 # ===========================================================================
@@ -629,6 +722,12 @@ def analyze(
         for sev, rule, file, line, msg, sugg in rule_missing_input_validation(f):
             add(sev, rule, file, line, msg, sugg)
         for sev, rule, file, line, msg, sugg in rule_dangerous_eval_exec(f):
+            add(sev, rule, file, line, msg, sugg)
+        for sev, rule, file, line, msg, sugg in rule_missing_path_validation(f):
+            add(sev, rule, file, line, msg, sugg)
+        for sev, rule, file, line, msg, sugg in rule_broad_exception(f):
+            add(sev, rule, file, line, msg, sugg)
+        for sev, rule, file, line, msg, sugg in rule_todo_markers(f):
             add(sev, rule, file, line, msg, sugg)
 
     return findings[:max_findings] if max_findings > 0 else findings

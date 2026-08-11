@@ -174,6 +174,30 @@ ACTIVE / RECENT ENTRIES
   FIX: dropped the dead [:44] slice instead - the message now shows the endpoint host cleanly
   STATUS: FIXED.
 
+[2026-08-11] AREA: feature request: add R9 path-from-user-input, R10 broad exception handlers, R11 TODO/FIXME markers
+  ERROR: the gate covers R1-R8 but not: file paths built from user-controlled input (path traversal), catch-all except Exception/BaseException handlers, or unfinished-work markers left in AI-generated code
+  CAUSE: feature request from the user; must follow the family standard - positive AND negative tests, no false positives on clean code, no overlap with R2 (swallow-shapes stay R2's HIGH terrain)
+  FIX: implemented R9/R10/R11 with anchored regexes, comment-skip, R2-overlap guard; 11 tests + 3 review-round regressions = 92 green; counts synced; committed through the gate
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R11 marker regex with re.I flags lowercase identifiers (reviewer)
+  ERROR: TODO_MARKER_RE is case-insensitive, so added lines containing the words todo / hack / xxx as identifiers are flagged - e.g. a variable named 'todo' (Spanish: all/everything), 'hack = parse(x)', or 'xxx' placeholders
+  CAUSE: re.I was applied to the whole marker alternation; markers are conventionally uppercase, lowercase collisions are real identifiers
+  FIX: drop re.I (uppercase-only) and pin with negative tests for 'todo = ' and 'hack = ' lines
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R9 path rule: user- prefix too loose, ctx/body sources, % style (reviewer)
+  ERROR: PATH_VAR_ARG_RE name check matches any identifier starting with 'user' - Path(user_home)/Path(user_profile) are server-side config, not user input; PATH_OF_REQ_RE matches ctx. (Celery context) and body. (config objects) which are not user-controlled; the message uses % formatting in an all-f-string codebase
+  CAUSE: over-broad heuristics were chosen for the name and request-source patterns; style drift with the rest of the module
+  FIX: name heuristic requires 'input' only; request sources narrowed to request/req/event; switch to an f-string; add a comment on the intended R9/R3 overlap on bare open()
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R10 inline swallow shape untested (reviewer)
+  ERROR: rule_broad_exception skips 'except Exception: pass' on one line via the t[m.end():] check, but no test pins that branch - the user's exact example shape has no regression coverage
+  CAUSE: test gap: only the multi-line swallow shape was pinned
+  FIX: add a one-line 'except Exception: pass' negative test for R10
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

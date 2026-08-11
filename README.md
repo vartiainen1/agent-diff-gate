@@ -28,7 +28,7 @@ Agent Diff Gate is **local, free, offline, and deterministic** — a single
 stdlib Python file you can drop into any repo, with no network and no data
 leaving the machine.
 
-## The eight rules
+## The eleven rules
 
 | Rule | Pattern | Severity |
 |------|---------|----------|
@@ -40,6 +40,9 @@ leaving the machine.
 | R6 `hardcoded-url` | `http(s)://` endpoints baked into code (comments / placeholder hosts ignored) | LOW |
 | R7 `missing-input-validation` | `int(input(...))` / `parseInt(req.query…)` without a guard | MEDIUM |
 | R8 `dangerous-eval-exec` | `eval()` / `exec()` / `compile()` / `new Function` / `shell=True` | MEDIUM |
+| R9 `missing-path-validation` | `Path(input(...))` / `open(req…)` — path from user input (Python) | MEDIUM |
+| R10 `broad-exception` | `except Exception` / `except BaseException` with a real body | MEDIUM |
+| R11 `todo-marker` | `TODO` / `FIXME` / `XXX` / `HACK` markers in added lines | LOW |
 
 Every finding reports `file:line`, the rule, a plain-language message, and a
 concrete suggestion.
@@ -155,6 +158,21 @@ Conversions inside try/except are considered validated and not flagged.
 command-injection risk. Member access (`re.compile`, `pattern.exec`) is not
 flagged.
 
+### R9 — missing path validation (MEDIUM, Python)
+`Path(...)` / `open(...)` fed directly from user-controlled input
+(`input()`, `sys.argv`, `os.environ`, `request`/`req`/`body` access, or a
+variable named like user input) — a path-traversal vector. Fixed paths like
+`Path(CONFIG_DIR) / "app.json"` are not flagged.
+
+### R10 — broad exception handlers (MEDIUM)
+`except Exception:` / `except BaseException:` that actually handle the error
+instead of re-raising a specific type — every error type gets masked. The
+swallow-shapes (`except Exception: pass` / lone `pass` body) are left to R2.
+
+### R11 — TODO/FIXME markers (LOW)
+`TODO` / `FIXME` / `XXX` / `HACK` markers left in added lines — the diff
+contains unfinished work that should be tracked, not committed silently.
+
 ## Error-log discipline (this repo)
 
 This repo uses the **agent error-log system**: every error encountered is
@@ -164,9 +182,9 @@ Session notes live in `notes.txt`, distilled lessons in `rules.txt`. Run
 
 ## Tests
 
-`python _test_diff.py` — 78 tests covering the diff parser, all eight rules
+`python _test_diff.py` — 92 tests covering the diff parser, all eleven rules
 (happy + negative + edge), the gate model, the error-log tooling, and
-process-style output-value integration tests. all 78 should pass.
+process-style output-value integration tests. all 92 should pass.
 
 ## Companion tools
 

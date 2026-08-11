@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   AI-generated code tends to produce, before the code reaches a PR.
 - **Diff sources:** working tree (`git diff`), staged (`--staged`), commit
   range (`--range A B`), stdin (`--stdin`), or a saved diff file (`--file`).
-- **Eight rules:**
+- **Eleven rules:**
   - R1 `hardcoded-secrets` (HIGH) — GitHub tokens, `sk-` API keys, AWS keys,
     private keys, credential literals (placeholders and env lookups ignored).
   - R2 `silent-failure` (HIGH/MEDIUM) — `except: pass`, empty handlers, bare
@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     `parseInt(req.query…)` converting raw input without a guard (try-aware).
   - R8 `dangerous-eval-exec` (MEDIUM) — `eval()`/`exec()`/`compile()`,
     `new Function(...)`, `subprocess` with `shell=True`.
+  - R9 `missing-path-validation` (MEDIUM, Python) — `Path()`/`open()` from
+    user-controlled input (`input()`, `sys.argv`, request access).
+  - R10 `broad-exception` (MEDIUM) — `except Exception`/`BaseException`
+    handlers; swallow-shapes stay R2's terrain.
+  - R11 `todo-marker` (LOW) — `TODO`/`FIXME`/`XXX`/`HACK` markers in added
+    lines.
 - **Gate model:** `--fail-on high|medium|low|none`, `--warn-only`,
   `--rule R1,R2`, `--exclude GLOB`, `--max-findings N`, `--json` output.
   Exit codes: 0 pass / 1 findings / 2 usage error.
@@ -40,8 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 78 tests including process-style
-  output-value integration tests. all 78 should pass.
+- **Tests:** `_test_diff.py` — 92 tests including process-style
+  output-value integration tests. all 92 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 

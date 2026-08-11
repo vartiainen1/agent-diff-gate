@@ -685,6 +685,175 @@ class TestRules(unittest.TestCase):
         finds = findings_for(d, "R8")
         self.assertTrue(any(f.line == 2 and "shell=True" in f.message for f in finds))
 
+    # --- R9 missing path validation -------------------------------------
+    def test_r9_path_from_input(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++p = Path(input("file: "))
+"""
+        finds = findings_for(d, "R9")
+        self.assertTrue(any(f.rule == "R9" and f.severity == "MEDIUM" for f in finds))
+
+    def test_r9_path_from_request(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++data = open(req.files["upload"])
+"""
+        finds = findings_for(d, "R9")
+        self.assertTrue(any("path-traversal" in f.message for f in finds))
+
+    def test_r9_user_input_variable(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++out = Path(user_input)
+"""
+        finds = findings_for(d, "R9")
+        self.assertTrue(any(f.rule == "R9" for f in finds))
+
+    def test_r9_fixed_paths_ok(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,4 @@
+ ok
++cfg = Path(CONFIG_DIR) / "app.json"
++with open(LOG_FILE) as fh:
++    raw = fh.read()
+"""
+        finds = findings_for(d, "R9")
+        self.assertEqual([f for f in finds if f.rule == "R9"], [])
+
+    def test_r9_non_python_skipped(self):
+        d = """diff --git a/x.js b/x.js
+--- a/x.js
++++ b/x.js
+@@ -1 +1,2 @@
+ ok
++const p = Path(input("file"));
+"""
+        finds = findings_for(d, "R9")
+        self.assertEqual([f for f in finds if f.rule == "R9"], [])
+
+    # --- R10 broad exception handlers -----------------------------------
+    def test_r10_broad_except_with_body(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,5 @@
+ ok
++try:
++    risky()
++except Exception as e:
++    logger.error(e)
+"""
+        finds = findings_for(d, "R10")
+        self.assertTrue(any(f.rule == "R10" and f.severity == "MEDIUM" for f in finds))
+
+    def test_r10_swallow_shape_left_to_r2(self):
+        # R2 owns the swallow-shapes - R10 must not double-fire on them
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,5 @@
+ ok
++try:
++    risky()
++except Exception:
++    pass
+"""
+        finds = findings_for(d, "R10")
+        self.assertEqual([f for f in finds if f.rule == "R10"], [])
+
+    def test_r10_specific_exception_ok(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,5 @@
+ ok
++try:
++    risky()
++except ValueError:
++    handle()
+"""
+        finds = findings_for(d, "R10")
+        self.assertEqual([f for f in finds if f.rule == "R10"], [])
+
+    # --- R11 TODO/FIXME markers ----------------------------------------
+    def test_r11_todo_marker(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++# TODO: refactor this
++data = process(x)
+"""
+        finds = findings_for(d, "R11")
+        self.assertTrue(any(f.rule == "R11" and f.severity == "LOW" for f in finds))
+
+    def test_r11_no_marker_ok(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++result = process(data)
+"""
+        finds = findings_for(d, "R11")
+        self.assertEqual([f for f in finds if f.rule == "R11"], [])
+
+    def test_r11_lowercase_identifiers_ok(self):
+        # regression (reviewer): lowercase todo/hack are identifiers, not markers
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,4 @@
+ ok
++todo = process(x)
++hack = parse(x)
++xxx = 1
+"""
+        finds = findings_for(d, "R11")
+        self.assertEqual([f for f in finds if f.rule == "R11"], [])
+
+    def test_r10_inline_swallow_left_to_r2(self):
+        # regression (reviewer): one-line 'except Exception: pass' is R2's
+        # terrain - R10 must not double-fire on it
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++try:
++    risky()
++except Exception: pass
+"""
+        finds = findings_for(d, "R10")
+        self.assertEqual([f for f in finds if f.rule == "R10"], [])
+
+    def test_r9_config_user_home_ok(self):
+        # regression (reviewer): user_home / user_profile are server-side
+        # config paths, not user-controlled input
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++home = Path(user_home)
++prof = Path(user_profile) / "settings.json"
+"""
+        finds = findings_for(d, "R9")
+        self.assertEqual([f for f in finds if f.rule == "R9"], [])
+
 # ===========================================================================
 # gate / severity model
 # ===========================================================================
@@ -901,7 +1070,7 @@ class TestIntegration(unittest.TestCase):
         self.assertIn("cannot read", out)
 
     def test_unknown_rule_usage_error(self):
-        rc, out = run_tool("--stdin", "--rule", "R9", stdin=CLEAN_DIFF)
+        rc, out = run_tool("--stdin", "--rule", "R99", stdin=CLEAN_DIFF)
         self.assertEqual(rc, 2)
         self.assertIn("unknown rule", out)
 
@@ -938,6 +1107,29 @@ class TestIntegration(unittest.TestCase):
         payload = json.loads(out)
         self.assertEqual(payload["gate"], "FAIL")
         self.assertEqual({f["rule"] for f in payload["findings"]}, {"R6", "R7", "R8"})
+
+    def test_new_rules_r9_r10_r11_process(self):
+        # every rule must be reachable through the real CLI (process-style)
+        d = """diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -1,5 +1,9 @@
+ def main():
+     cfg = load()
++    path = Path(input("file: "))
++    try:
++        risky()
++    except Exception as e:
++        log(e)
++    # TODO: wire up retries
+     return cfg
+"""
+        rc, out = run_tool("--stdin", "--rule", "R9,R10,R11", "--fail-on", "medium",
+                           "--json", stdin=d)
+        self.assertEqual(rc, 1)
+        payload = json.loads(out)
+        self.assertEqual(payload["gate"], "FAIL")
+        self.assertEqual({f["rule"] for f in payload["findings"]}, {"R9", "R10", "R11"})
 
     def test_version(self):
         rc, out = run_tool("--version")
