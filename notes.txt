@@ -133,3 +133,68 @@ SESSION NOTE (2026-08-11): dogfood - gate scanned its own commit history
   hook on dash (Ubuntu) while passing on Windows Git Bash - sh -n on a mixed
   CI matrix is the only real check. Gate fix landed as PRs #32/#28/#25; all
   post-merge CI green.
+================================================================================
+FAMILY README CONTRACT — canonical template (for future rounds)
+================================================================================
+Every repo in the agent-memory family (agent-error-log, agent-decision-log,
+agent-log-ai, agent-diff-gate) follows one README shape. Enforced by
+_check_readme_style.py (identical copy in all four repos; it derives its own
+repo name from the folder it lives in) in the CI job "README drift guards
+(count + family style)". If you edit any README, the guard must still pass —
+run `python _check_readme_style.py` locally before committing.
+
+TITLE
+  H1 is the lowercase repo-name style: `# agent-<repo>` (e.g. `# agent-diff-gate`).
+
+BADGE SET (header block, before the first `## ` section)
+  1. CI badge: [![CI](https://github.com/vartiainen1/<repo>/actions/workflows/ci.yml/badge.svg)](...)
+  2. checks-on-master, release, license, python, dependencies-0 badges (shields.io)
+  3. Visitors badge (visitor-badge.laobi.icu) — optional, keep its position
+  4. EXACTLY three companion badges, one per sibling repo, each linking
+     https://github.com/vartiainen1/<sibling>. Format:
+     [![companion-<name>](https://img.shields.io/badge/companion-agent--<sibling>-2ea44f)](https://github.com/vartiainen1/<sibling>)
+  Insert companion badges AFTER the Visitors badge line (if present) so no
+  pre-existing line shifts in the root..HEAD diff (R6 self-trigger lesson).
+
+CANONICAL TAIL (order matters; License is the LAST section, nothing after)
+  ## Companion tools        (family table: Repo | What it remembers | How it works)
+  ## Installing with pip (optional)
+  ## Dogfood ledger          (lead-in paragraph + Commits scanned / Findings table)
+  ## License                 <- last section in the file
+
+ORDERING RULES
+  - ## Development before ## Security (all four repos)
+  - agent-diff-gate additionally: ## Security before ## Limits
+
+SECTION LISTS (what sits before the canonical tail is repo-specific)
+  - agent-error-log: Who is this for? -> Why this exists -> What's inside ->
+    Quick start -> See it in action -> The workflow it enforces ->
+    Tooling reference -> Customization -> FAQ -> [tail]
+  - agent-decision-log: Why this exists -> Quick start -> What a decision
+    looks like -> The fork rule -> Tooling reference -> How the currency rule
+    works -> The compounding loop -> FAQ -> [tail]
+  - agent-log-ai: Why this exists -> Quick start -> Commands -> Design ->
+    FAQ -> [tail]
+  - agent-diff-gate: Live demo -> Why this exists -> Highlights -> The
+    fourteen built-in rules -> Quick start -> Usage — the full CLI ->
+    Hooks & agent integration -> Plugin rules -> FAQ -> Development ->
+    Security -> Limits -> Rules detail -> Error-log discipline -> [tail]
+
+WHAT THE GUARD CHECKS (`python _check_readme_style.py`)
+  - H1 equals `# agent-<repo>` (folder name)
+  - exactly 3 companion badges, all in the header block, all linking
+    distinct sibling repos; no missing / extra / duplicate
+  - canonical tail present and in order; License is the last `## ` heading,
+    Dogfood ledger immediately before it
+  - Development before Security; diff-gate: Security before Limits
+
+NOTES
+  - Renaming a CI job in .github/workflows/ci.yml breaks branch protection:
+    the required status check is the JOB NAME. If you rename a job, update
+    the repo's required_status_checks contexts (current required name is
+    "README drift guards (count + family style)").
+  - Test counts are enforced separately by _check_readme_count.py — update
+    every count in the same commit as the suite change.
+  - After each shipped round, refresh the Dogfood ledger "Commits scanned"
+    rows to post-commit truth (git rev-list --count HEAD) and re-scan the
+    full history with the family gate.

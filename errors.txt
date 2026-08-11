@@ -553,6 +553,19 @@ ACTIVE / RECENT ENTRIES
        wired into the docs-guard CI job on every push/PR.
   STATUS: FIXED.
 
+[2026-08-11] AREA: canonical family README template documented in notes for future rounds
+  ERROR: the canonical family README shape (section order + badge set)
+         lived only in the guard script and the audit transcript; future
+         rounds had no single reference describing the contract
+  CAUSE: the contract was enforced mechanically but never documented in
+         one place, so a future editor could not reconstruct it without
+         reading the guard's source
+  FIX: documented the full canonical template (title, badge set,
+       canonical tail, ordering rules, per-repo section lists, guard
+       behavior, branch-protection + ledger maintenance notes) in
+       agent-diff-gate/notes.txt for future rounds.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 
