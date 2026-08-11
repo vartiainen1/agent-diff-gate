@@ -123,8 +123,8 @@ ACTIVE / RECENT ENTRIES
 [2026-08-11] AREA: stray hooks/_check_readme_count.py copied from agent-error-log during scaffold
   ERROR: the old drift guard (points at _test_errors.py) was swept into hooks/ by git add -A and committed
   CAUSE: scaffold cp command copied agent-error-log/_check_readme_count.py into the new repo hooks/ folder; the real drift guard lives at the repo root
-  FIX: 
-  STATUS: OPEN.
+  FIX: stray file verified absent from hooks/ (removed during the earlier scaffold cleanup); the real drift guard is the root-level _check_readme_count.py, the only file referenced by ci.yml (drift-guard job).
+  STATUS: FIXED.
 
 [2026-08-11] AREA: cmd_archive apply drops the log header block
   ERROR: archiving with --apply deletes the HOW TO USE preamble: the rebuilt log starts at the first kept entry
@@ -421,6 +421,9 @@ EXAMPLE ENTRIES (replace with your own; delete this section header)
          instead of defaulting
   FIX: use payload.get('amount', 0) and guard None before .strip()
   STATUS: FIXED.
+
+================================================================================
+ARCHIVED ENTRIES (FIXED, moved by check_diff.py --archive-days)
 
 [2026-08-07] AREA: image resize service timeouts
   ERROR: resize job hangs for >60s on 50MP inputs
