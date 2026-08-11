@@ -382,6 +382,12 @@ ACTIVE / RECENT ENTRIES
   FIX: FIX: SECURITY.md gained a Trust model section (plugins execute code, diffs are untrusted, containment + size caps + redaction + sanitize, fully offline); rules.d/README gained a Trust note; junction + chars-cap limitations documented.
   STATUS: FIXED.
 
+[2026-08-11] AREA: R4 fires on test-fixture content and log/docs boilerplate (dogfood: 228 full-history findings, 142 on _test_diff.py fixture strings + errors.txt separators + yml/json/md scaffolding)
+  ERROR: rule_duplicate_logic scans every file's raw added lines: triple-quoted diff fixtures in _test_diff.py repeat lines like --- a/app.py and @@ -1,2 +1,3 @@, errors.txt repeats ===== separators and STATUS: FIXED./FIXED. labels, and .yml/.json/.md files repeat structural keys - none of these are code copy-paste
+  CAUSE: R4 has no extension filter (the other rules all have one) and no comment/docstring awareness - it is the last rule outside the _code_only pipeline; also the analyze() dispatcher itself repeats 'for sev...in rule_X(f):' + 'add(...)' 14x, which R4 then flags
+  FIX: rule_duplicate_logic now scans code files only (R4_CODE_EXTS + R4_CODE_NAMES for extension-less files like Dockerfile/Makefile) and walks the new-side file through _code_only() with the file-backed seed (the R3/R7/R9/R10 pipeline) - triple-quoted fixture/template content and comments never fire. All built-in rules normalized to (f, root); analyze() dispatches via a BUILTIN_RULES loop (removes the dispatcher's own 14x duplicated call block). Dogfood: 228 -> 171, remaining hits verified as real code; 161 -> 164 tests.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

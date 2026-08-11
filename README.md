@@ -137,7 +137,9 @@ statement-by-statement, so calls after `except`/`finally` are flagged again.
 
 ### R4 — duplicate logic (MEDIUM)
 Identical non-trivial statements added 2+ times in one diff — the copy-paste
-signal that means "extract a helper".
+signal that means "extract a helper". Scans code files only, with the same
+comment/docstring stripping as R3/R7/R9/R10 — test-fixture strings, comments,
+and log/docs/config boilerplate never fire.
 
 ### R5 — ignores existing patterns (MEDIUM)
 An added `def`/`class`/`function`/`const` whose name already exists in the
@@ -226,9 +228,9 @@ Session notes live in `notes.txt`, distilled lessons in `rules.txt`. Run
 
 ## Tests
 
-`python _test_diff.py` — 161 tests covering the diff parser, all fourteen built-in rules + plugins
+`python _test_diff.py` — 164 tests covering the diff parser, all fourteen built-in rules + plugins
 (happy + negative + edge), the gate model, the error-log tooling, and
-process-style output-value integration tests. all 161 should pass.
+process-style output-value integration tests. all 164 should pass.
 
 ## Companion tools
 

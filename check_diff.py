@@ -430,7 +430,7 @@ def _secret_matches(line: str):
         )
 
 
-def rule_hardcoded_secrets(f: DiffFile) -> list[tuple]:
+def rule_hardcoded_secrets(f: DiffFile, root: Path) -> list[tuple]:
     out = []
     for ln in f.added:
         for msg, sugg in _secret_matches(ln.text):
@@ -438,7 +438,7 @@ def rule_hardcoded_secrets(f: DiffFile) -> list[tuple]:
     return out
 
 
-def rule_silent_failure(f: DiffFile) -> list[tuple]:
+def rule_silent_failure(f: DiffFile, root: Path) -> list[tuple]:
     out = []
     for run in f.added_runs:
         prev = None
@@ -580,20 +580,55 @@ def _substantive(text: str) -> bool:
     return True
 
 
-def rule_duplicate_logic(f: DiffFile) -> list[tuple]:
+R4_CODE_EXTS = {
+    "py", "js", "mjs", "cjs", "jsx", "ts", "tsx",
+    "java", "kt", "kts", "scala", "c", "h", "cpp", "hpp", "cc",
+    "cs", "go", "rs", "rb", "php", "swift", "sh", "bash", "zsh",
+    "sql",
+}
+# extension-less build/config files are code too - and Dockerfiles are a
+# prime AI-churn surface (copy-pasted RUN layers)
+R4_CODE_NAMES = {
+    "Dockerfile", "Makefile", "Rakefile", "Gemfile", "Vagrantfile",
+    "Jenkinsfile", "CMakeLists.txt", ".gitlab-ci.yml",
+}
+
+
+def rule_duplicate_logic(f: DiffFile, root: Path) -> list[tuple]:
+    """R4: identical non-trivial statements added 2+ times in one diff = the
+    copy-paste signal that means 'extract a helper'.
+
+    Scans code files only (extension + known-filename filter) and walks the
+    whole new-side file through _code_only() with the file-backed opener
+    seed (mirror of R3/R7/R9/R10): duplicate string content inside
+    triple-quoted strings (test fixtures AND legit templates) and comment
+    mentions never fire - string content is data, not statements - while
+    real code duplicates still do. Log/config/docs boilerplate (STATUS:
+    labels, separators, README rows, YAML/JSON scaffolding) is excluded by
+    the filter - a label or a row is not a code statement.
+    """
+    ext = f.path.rsplit(".", 1)[-1].lower() if "." in f.path else ""
+    base = f.path.rsplit("/", 1)[-1]
+    if ext not in R4_CODE_EXTS and base not in R4_CODE_NAMES:
+        return []
     counts: dict[str, list[int]] = {}
-    for ln in f.added:
-        if _substantive(ln.text):
-            counts.setdefault(ln.text.strip(), []).append(ln.lineno)
+    lines = _new_side_lines(f)
+    in_doc = _docstring_state_before(f, root, lines)
+    for lineno, text, is_added in lines:
+        code, in_doc = _code_only(text, in_doc)
+        if not is_added:
+            continue
+        if _substantive(code):
+            counts.setdefault(code.strip(), []).append(lineno)
     out = []
-    for text, lines in counts.items():
-        if len(lines) >= 2:
+    for text, where in counts.items():
+        if len(where) >= 2:
             snippet = _display_safe(text[:48])
             if any(_secret_matches(text)):
                 snippet = "<redacted: contains a credential>"  # S2
             out.append((
-                "MEDIUM", "R4", f.path, lines[0],
-                f"identical statement added {len(lines)}x (copy-paste signal): "
+                "MEDIUM", "R4", f.path, where[0],
+                f"identical statement added {len(where)}x (copy-paste signal): "
                 f"{snippet!r}",
                 DEFAULT_SUGGEST[R4_NAME],
             ))
@@ -695,7 +730,7 @@ def _code_only(t: str, in_doc: str | None) -> tuple[str, str | None]:
             # docstring left open: keep only code before the opening quote
             return s.split(q, 1)[0], q
     return s, None
-def rule_hardcoded_url(f: DiffFile) -> list[tuple]:
+def rule_hardcoded_url(f: DiffFile, root: Path) -> list[tuple]:
     out = []
     for ln in f.added:
         if _looks_commented(ln.text):
@@ -764,7 +799,7 @@ def rule_missing_input_validation(f: DiffFile, root: Path) -> list[tuple]:
             ))
     return out
 
-def rule_dangerous_eval_exec(f: DiffFile) -> list[tuple]:
+def rule_dangerous_eval_exec(f: DiffFile, root: Path) -> list[tuple]:
     out = []
     for run in f.added_runs:
         pending_sub = None  # added-line number of an open subprocess call
@@ -882,7 +917,7 @@ def rule_broad_exception(f: DiffFile, root: Path) -> list[tuple]:
         ))
     return out
 
-def rule_todo_markers(f: DiffFile) -> list[tuple]:
+def rule_todo_markers(f: DiffFile, root: Path) -> list[tuple]:
     """R11: TODO/FIXME/XXX/HACK markers left in added lines = unfinished work.
 
     Deliberate exception to the R3/R7/R9/R10 comment-stripping sweep: marker
@@ -906,7 +941,7 @@ def rule_todo_markers(f: DiffFile) -> list[tuple]:
     return out
 
 
-def rule_config_credentials(f: DiffFile) -> list[tuple]:
+def rule_config_credentials(f: DiffFile, root: Path) -> list[tuple]:
     """R12: connection strings / JWTs with embedded credentials - secrets in
     shapes R1 does not cover."""
     out = []
@@ -928,7 +963,7 @@ def rule_config_credentials(f: DiffFile) -> list[tuple]:
     return out
 
 
-def rule_unsafe_deserialization(f: DiffFile) -> list[tuple]:
+def rule_unsafe_deserialization(f: DiffFile, root: Path) -> list[tuple]:
     out = []
     for ln in f.added:
         if _looks_commented(ln.text):
@@ -962,7 +997,7 @@ def rule_unsafe_deserialization(f: DiffFile) -> list[tuple]:
     return out
 
 
-def rule_sql_injection(f: DiffFile) -> list[tuple]:
+def rule_sql_injection(f: DiffFile, root: Path) -> list[tuple]:
     out = []
     for ln in f.added:
         t = ln.text
@@ -1099,6 +1134,28 @@ class Finding:
         }
 
 
+# every built-in rule takes (f, root); the ones that never read files simply
+# ignore root. One uniform signature lets analyze() dispatch in a loop
+# instead of 14 copy-pasted call blocks (which R4 itself flagged as the
+# tool's own duplicate-logic finding).
+BUILTIN_RULES = (
+    rule_hardcoded_secrets,
+    rule_silent_failure,
+    rule_missing_error_handling,
+    rule_duplicate_logic,
+    rule_ignores_existing,
+    rule_hardcoded_url,
+    rule_missing_input_validation,
+    rule_dangerous_eval_exec,
+    rule_missing_path_validation,
+    rule_broad_exception,
+    rule_todo_markers,
+    rule_config_credentials,
+    rule_unsafe_deserialization,
+    rule_sql_injection,
+)
+
+
 def analyze(
     diff_text: str,
     *,
@@ -1125,34 +1182,9 @@ def analyze(
     for f in files:
         if excludes and any(fnmatch.fnmatch(f.path, pat) for pat in excludes):
             continue
-        for sev, rule, file, line, msg, sugg in rule_hardcoded_secrets(f):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_silent_failure(f):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_missing_error_handling(f, root):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_duplicate_logic(f):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_ignores_existing(f, root):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_hardcoded_url(f):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_missing_input_validation(f, root):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_dangerous_eval_exec(f):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_missing_path_validation(f, root):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_broad_exception(f, root):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_todo_markers(f):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_config_credentials(f):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_unsafe_deserialization(f):
-            add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_sql_injection(f):
-            add(sev, rule, file, line, msg, sugg)
+        for rule_fn in BUILTIN_RULES:
+            for sev, rule, file, line, msg, sugg in rule_fn(f, root):
+                add(sev, rule, file, line, msg, sugg)
         if plugins:
             for p in plugins.values():
                 try:

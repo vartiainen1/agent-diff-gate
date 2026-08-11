@@ -57,8 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 161 tests including process-style
-  output-value integration tests. all 161 should pass.
+- **Tests:** `_test_diff.py` — 164 tests including process-style
+  output-value integration tests. all 164 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 
@@ -131,6 +131,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   product path never leaks a raw traceback (clean `GATE: internal error`,
   exit 2); SECURITY.md documents the trust model (plugins execute code,
   diffs are untrusted input).
+- **R4 (duplicate-logic) precision:** now scans code files only, walking the
+  new-side file through the same comment/docstring stripping as R3/R7/R9/R10 -
+  test-fixture string content, comments, and log/docs/config boilerplate no
+  longer fire (full-history dogfood: 228 -> 171, all remaining hits verified
+  as real code statements - rule-body idioms and test-suite assertions; per-
+  commit they rarely co-occur). All built-in rules now share one `(f, root)`
+  signature and the analyze() dispatcher runs them in a loop, removing the
+  dispatcher's own 14x duplicated call block.
 ## [0.0.0] — placeholder (never released)
 
 - Repository scaffolding only.

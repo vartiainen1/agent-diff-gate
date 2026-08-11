@@ -677,6 +677,52 @@ class TestRules(unittest.TestCase):
         finds = findings_for(d, "R4")
         self.assertEqual([f for f in finds if f.rule == "R4"], [])
 
+    def test_r4_docstring_fixture_content_ignored(self):
+        # dogfood class: duplicates inside a triple-quoted string in the
+        # ANALYZED file are string content, not code - only the real
+        # duplicates after the docstring fire (mirror of R3/R7/R9/R10)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,7 @@
+ ok
++    """doc prose
++    result = normalize(data)
++    result = normalize(data)
++    """
++result = normalize(data)
++result = normalize(data)
+'''
+        finds = findings_for(d, "R4")
+        self.assertEqual([f for f in finds if f.line in (3, 4)], [])
+        self.assertTrue(any(f.line == 6 and "2x" in f.message for f in finds))
+
+    def test_r4_non_code_extension_ignored(self):
+        # log/docs/config boilerplate (STATUS: labels, separators) is not a
+        # code statement - R4 scans code extensions only
+        d = """diff --git a/notes.txt b/notes.txt
+--- a/notes.txt
++++ b/notes.txt
+@@ -1 +1,3 @@
+ ok
++STATUS: OPEN.
++STATUS: OPEN.
+"""
+        finds = findings_for(d, "R4")
+        self.assertEqual([f for f in finds if f.rule == "R4"], [])
+
+    def test_r4_js_code_still_fires(self):
+        d = """diff --git a/x.js b/x.js
+--- a/x.js
++++ b/x.js
+@@ -1 +1,3 @@
+ ok
++const result = normalize(data);
++const result = normalize(data);
+"""
+        finds = findings_for(d, "R4")
+        self.assertTrue(any("2x" in f.message for f in finds))
+
     # --- R5 ignores-existing --------------------------------------------
     def test_r5_redefinition_from_context(self):
         # no file on disk (offline mode) — the diff context must carry the signal
