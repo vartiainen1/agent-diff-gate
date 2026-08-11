@@ -624,6 +624,7 @@ class TestLogTooling(unittest.TestCase):
             self.assertEqual(out.count("AREA: old bug"), 1)  # moved, not duplicated
             self.assertEqual(out.count("AREA: new bug"), 1)
             self.assertIn("ARCHIVED ENTRIES", out)
+            self.assertIn("HEADER", out)  # reviewer: header must survive
             active = [e["area"] for e in cd.parse_entries(out)]
             self.assertEqual(active, ["new bug"])  # old bug no longer active
 

@@ -126,6 +126,24 @@ ACTIVE / RECENT ENTRIES
   FIX: 
   STATUS: OPEN.
 
+[2026-08-11] AREA: cmd_archive apply drops the log header block
+  ERROR: archiving with --apply deletes the HOW TO USE preamble: the rebuilt log starts at the first kept entry
+  CAUSE: the rewrite builds new_parts only from each kept entry span (head[m.start():end]); everything before the first entry (headers, status vocabulary) is never included
+  FIX: rebuild now prepends the header block and carries separator gaps; verified header survives, entry moved exactly once.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R3 with_seen dead variable
+  ERROR: with_seen is assigned in rule_missing_error_handling but never read; the open() check uses the same-line with-test instead
+  CAUSE: leftover from an earlier draft of the rule; dead code that misleads future editors
+  FIX: removed the dead variable; the rule uses the same-line with-test.
+  STATUS: FIXED.
+
+[2026-08-11] AREA: R1 double finding on one credential line
+  ERROR: api_key = sk-... emits BOTH the token-pattern finding and the generic credential-assignment finding on the same line
+  CAUSE: _secret_matches yields every matched pattern independently; a specific token match plus the generic assignment rule both fire
+  FIX: a line matched by a token pattern no longer emits the generic credential finding as well; one R1 finding per line.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

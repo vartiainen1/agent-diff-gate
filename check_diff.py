@@ -240,12 +240,18 @@ DEFAULT_SUGGEST = {
 
 
 def _secret_matches(line: str):
-    """Yield (rule, message) for every secret pattern matched in one line."""
+    """Yield (rule, message) for every secret pattern matched in one line.
+
+    A line already matched by a specific token pattern does not also emit
+    the generic credential-assignment finding (reviewer: double findings on
+    one line are noise)."""
+    found_token = False
     for pat, what in SECRET_PATTERNS:
         if re.search(pat, line):
+            found_token = True
             yield f"{what} in an added line", f"found {what}; {DEFAULT_SUGGEST[R1_NAME]}"
     m = CRED_ASSIGN_RE.search(line)
-    if m and not PLACEHOLDER_RE.search(m.group(1)):
+    if m and not PLACEHOLDER_RE.search(m.group(1)) and not found_token:
         yield (
             "hardcoded credential assigned a literal value",
             f"credential '{m.group(1)[:24]}...' is a literal; {DEFAULT_SUGGEST[R1_NAME]}",
@@ -301,7 +307,7 @@ def rule_missing_error_handling(f: DiffFile) -> list[tuple]:
         return []
     out = []
     for run in f.added_runs:
-        try_seen = with_seen = False
+        try_seen = False
         for ln in run:
             t = ln.text
             if re.search(r"\btry\s*:", t):
@@ -311,8 +317,6 @@ def rule_missing_error_handling(f: DiffFile) -> list[tuple]:
             # close the scope (logged: R3 try-scope reset misses typed handlers)
             if re.match(r"^\s*(except|finally)\b", t):
                 try_seen = False
-            if re.search(r"\bwith\b", t):
-                with_seen = True
             if OPEN_RE.search(t) and "with" not in t and not try_seen:
                 out.append((
                     "MEDIUM", "R3", f.path, ln.lineno,
@@ -702,14 +706,20 @@ def cmd_archive(path: Path, days: int, apply: bool) -> int:
     head = text[:cut]
     spans = list(ENTRY_RE.finditer(head))
     drop = {(e["tag"], e["area"]) for e in to_move}
-    new_parts = []
-    pos = 0
+    # header = everything before the first entry (HOW TO USE, statuses,
+    # section title) — must survive archiving (logged: it was dropped)
+    header = head[:spans[0].start()] if spans else head
+    new_parts = [header]
+    prev_end = spans[0].start() if spans else cut
     for i, m in enumerate(spans):
         key = (m.group(1), m.group("area").strip())
-        if key in drop:
-            continue  # removed from the active section
         end = spans[i + 1].start() if i + 1 < len(spans) else cut
-        new_parts.append(head[m.start():end])
+        if key in drop:
+            prev_end = end  # skip this entry AND its trailing separator
+            continue
+        # include the separator gap from prev_end so blank lines survive
+        new_parts.append(head[prev_end:end])
+        prev_end = end
     blocks = []
     for e in to_move:
         blocks.append(
