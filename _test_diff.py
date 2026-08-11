@@ -2112,6 +2112,19 @@ class TestIntegration(unittest.TestCase):
                 "hunter2" in f["message"] or "hunter2" in f["suggestion"]
                 for f in payload2["findings"]))
 
+    def test_git_modes_outside_repo_clean_error(self):
+        """--staged outside a git repo must give a clean one-line error, not
+        git's raw usage dump (regression: finding #3 from the 500-test run -
+        git diff fell back to --no-index mode and leaked its whole usage
+        screen; the gate now probes `git rev-parse --is-inside-work-tree`
+        first). Exit code stays 2 (environment error)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, out = run_tool_in(tmp, "--staged")
+            self.assertEqual(rc, 2)
+            self.assertIn("not a git repository", out)
+            self.assertNotIn("--pickaxe", out)  # no raw git usage dump
+            self.assertNotIn("Traceback", out)
+
     def test_log_validate_subprocess(self):
         rc, out = run_tool("--log")
         self.assertEqual(rc, 0)

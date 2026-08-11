@@ -1333,14 +1333,45 @@ def _run_git(args: list[str]) -> tuple[str, str]:
     return proc.stdout, ""
 
 
+def _probe_git_repo() -> str | None:
+    """Return a clean error string when we are NOT inside a git work tree.
+
+    Outside a repo, `git diff` falls back to --no-index mode and dumps its
+    whole usage screen to stderr (the raw dump is noise, not a reason). The
+    one-line probe `git rev-parse --is-inside-work-tree` fails with a short
+    fatal message instead, which is what a gate user actually needs to see:
+    "run me from inside a git repo, or feed a diff via --stdin/--file".
+    Returns None when we ARE inside a repo.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, timeout=15,
+            encoding="utf-8", errors="replace",
+        )
+    except OSError as exc:
+        return f"git not available: {exc}"
+    except subprocess.TimeoutExpired:
+        return "git probe timed out after 15s"
+    if proc.returncode != 0:
+        return ("not a git repository - run the gate from inside a git repo, "
+                "or feed the diff via --stdin/--file")
+    return None
+
+
 def get_diff(source: str, range_args: list[str] | None) -> tuple[str, str]:
     """Run the git diff for a source; return (diff_text, err).
 
     err is empty on success. The source LABEL is built by the caller, which
     already knows the exact invocation - this function must only distinguish
     success from failure (logged: git modes broke because the label was
-    mistaken for an error).
+    mistaken for an error). A missing git repo is reported cleanly instead
+    of leaking git's raw usage dump (logged: finding #3 from the 500-test
+    run - not-a-git-repo dumped git usage and exited 2).
     """
+    probe_err = _probe_git_repo()
+    if probe_err:
+        return "", probe_err
     if source == "range":
         out, err = _run_git(["diff", *range_args])
     elif source == "staged":
