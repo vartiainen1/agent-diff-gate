@@ -1,10 +1,14 @@
 # Agent Diff Gate
 
 [![CI](https://github.com/vartiainen1/agent-diff-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/vartiainen1/agent-diff-gate/actions/workflows/ci.yml)
-![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)
-![Release](https://img.shields.io/github/v/release/vartiainen1/agent-diff-gate)
-![Dependencies: zero](https://img.shields.io/badge/dependencies-zero-brightgreen.svg)
+[![checks on master](https://img.shields.io/github/checks-status/vartiainen1/agent-diff-gate/master)](https://github.com/vartiainen1/agent-diff-gate/actions)
+[![release](https://img.shields.io/github/v/release/vartiainen1/agent-diff-gate)](https://github.com/vartiainen1/agent-diff-gate/releases)
+[![license](https://img.shields.io/github/license/vartiainen1/agent-diff-gate)](https://github.com/vartiainen1/agent-diff-gate/blob/master/LICENSE)
+[![python](https://img.shields.io/badge/python-3.9%20%7C%203.11%20%7C%203.12-3776AB)](https://github.com/vartiainen1/agent-diff-gate/actions)
+[![dependencies-0](https://img.shields.io/badge/dependencies-0-brightgreen)](https://github.com/vartiainen1/agent-diff-gate)
+[![companion-error](https://img.shields.io/badge/companion-agent--error--log-2ea44f)](https://github.com/vartiainen1/agent-error-log)
+[![companion-decision](https://img.shields.io/badge/companion-agent--decision--log-2ea44f)](https://github.com/vartiainen1/agent-decision-log)
+[![companion-log-ai](https://img.shields.io/badge/companion-agent--log--ai-2ea44f)](https://github.com/vartiainen1/agent-log-ai)
 
 **The pre-commit quality gate for AI-generated code.** A zero-dependency,
 stdlib-only CLI that sits between your AI coding agent and `git commit`,
@@ -245,6 +249,29 @@ python check_diff.py --rules-dir /path/to/dir  # load rules from elsewhere
 See `rules.d/_example_rule.py` (working template) and `rules.d/README.md`
 (the plugin contract).
 
+## FAQ
+
+**Is my code sent anywhere?** No. The tool is fully offline and
+deterministic — no network calls, no telemetry, nothing leaves the machine.
+Plugins execute local code you chose to add.
+
+**Will this slow down every commit?** Measured: ~0.5 s per 10k diff lines
+including interpreter startup, ~1.4 s at 30k — linear scan, no per-file
+process spawn. On a typical pre-commit diff it's under a second.
+
+**What if a rule is wrong for my repo?** Every rule is tunable or skippable:
+`--rule R1,R3` runs only the listed rules, `--exclude GLOB` skips files,
+`--fail-on medium`/`low` lowers the bar, and `--allow-host` extends the R6
+allow-list at runtime — no file fork required. Plugin rules can fully replace
+built-ins if your team standardizes on a custom set.
+
+**Does the gate need a language toolchain?** No — it parses unified diffs
+with the Python standard library. No AST dependency, no per-language SDKs.
+
+**How do I make it mandatory?** Copy the hooks (or run `hooks/install.sh
+--git`), and use the CI `commit-gate` job as the server-side backstop —
+where `--no-verify` cannot reach.
+
 ## Security
 
 The gate analyzes **untrusted input** (hostile diffs, third-party plugins),
@@ -273,7 +300,7 @@ follow the private-advisory path documented there — never a public issue.
   aids, not proof of security.
 - Scans diffs up to **8 MiB**; the gate is deterministic and offline.
 
-## Tests
+## Development
 
 `python _test_diff.py` — **170 tests** covering the diff parser, all
 fourteen built-in rules + plugins (happy + negative + edge), the severity
@@ -281,7 +308,10 @@ gate model, the error-log tooling, and process-style output-value
 integration tests. `all 170 should pass`. The suite runs on
 **Python 3.9 / 3.11 / 3.12 across Ubuntu and Windows** in CI, plus a
 packaging job that builds the wheel and smoke-tests the `diff-gate` console
-script.
+script. README test counts are enforced by a drift-guard CI job.
+
+Releases are cut from `CHANGELOG.md` (Keep a Changelog / SemVer) by the
+release workflow — see `CHANGELOG.md` and `CONTRIBUTING.md`.
 
 ## Rules detail
 
@@ -402,12 +432,27 @@ cross-project memory, pair it with the siblings:
 - **agent-log-ai** — reasoning layer: why it kept happening
 - **agent-diff-gate** (this repo) — enforcement layer: catch it before commit
 
-## Contributing & license
+## Installing with pip (optional)
 
-- **License:** MIT — see [`LICENSE`](LICENSE).
-- **Changes:** [`CHANGELOG.md`](CHANGELOG.md) (Keep a Changelog / SemVer).
-- **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md).
-- **Security:** [`SECURITY.md`](SECURITY.md).
+The single-file adoption story is unchanged — copy `check_diff.py` into your
+project and you are done. The tool is *also* pip-installable with zero
+runtime dependencies:
+
+```sh
+pip install agent-diff-gate
+diff-gate --help
+```
+
+- The package version is derived from the git tag (setuptools-scm), which the
+  release workflow creates from CHANGELOG.md - there is no version to drift.
+- Run from the installed package, default paths (`errors.txt`, `rules.txt`)
+  resolve against your current directory; an in-place copy keeps resolving
+  against the file's folder.
+- The console script is `diff-gate`; the module is `check_diff`.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
 
 ## Dogfood ledger
 
@@ -416,7 +461,7 @@ over this repo's entire history (initial commit → `HEAD`):
 
 | | |
 |---|---|
-| Commits scanned | 42 (~5,700 diff lines) |
+| Commits scanned | 44 (~5,700 diff lines) |
 | Findings | **194** — 36 HIGH · 151 MEDIUM · 7 LOW |
 | Classes | R4 ×103 · R8 ×20 · R13 ×13 · R10 ×12 · R2 ×10 · R3 ×9 · R14 ×7 · R11 ×7 · R1 ×4 · R12 ×4 · R5 ×4 · R7 ×1 |
 | Suppressed | **none** — every finding is fixed, tracked in `errors.txt`, or documented here |
