@@ -39,6 +39,8 @@ The repo also carries the agent-error-log discipline (log before fixing):
     python check_diff.py --lessons [--apply]
 """
 
+from __future__ import annotations  # PEP 563: lazy annotations -> Python 3.9 compat
+
 import argparse
 import fnmatch
 import importlib.util

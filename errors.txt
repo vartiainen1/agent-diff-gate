@@ -394,6 +394,12 @@ ACTIVE / RECENT ENTRIES
   FIX: 
   STATUS: OPEN.
 
+[2026-08-11] AREA: CI first run: py 3.9 matrix cells fail - PEP 604 union annotations evaluated at import
+  ERROR: TypeError: unsupported operand type(s) for |: 'type' and 'NoneType' at check_diff.py:70 (int | None) on Python 3.9; 10 union annotations break the whole module at import - both 3.9 cells (ubuntu + windows) failed
+  CAUSE: check_diff.py has no 'from __future__ import annotations'; annotations are evaluated at def-time on 3.9, unions need 3.10+; local dev is 3.11-only and py_compile does not execute annotations, so it only surfaced on the first CI run
+  FIX: added 'from __future__ import annotations' (PEP 563) to check_diff.py - all 10 PEP 604 union annotations are now evaluated lazily, so the module imports cleanly on Python 3.9 (verified by the CI matrix on re-push).
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 
