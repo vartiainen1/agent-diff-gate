@@ -406,6 +406,12 @@ ACTIVE / RECENT ENTRIES
   FIX: new _write_lf(path, text) helper (open with newline="" keeps LF on Windows) replaces Path.write_text(newline=...) at all three call sites - cmd_add, cmd_archive, cmd_lessons; runs on Python 3.9 (CI matrix verified on re-push).
   STATUS: FIXED.
 
+[2026-08-11] AREA: README polish - CI status badge + pip install command
+  ERROR: README has no CI status badge and no pip install path - new adopters can only copy the single file; the published-package install route is undocumented
+  CAUSE: the repo was local-only until v0.1.0; the badge and pip route only make sense once the repo is public and the package is publishable, which is now the case
+  FIX: README title now carries the GitHub Actions CI badge (github.com/vartiainen1/agent-diff-gate/actions/workflows/ci.yml) and the Install section leads with "pip install agent-diff-gate" + the diff-gate console command, with the single-file copy kept as the alternative.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

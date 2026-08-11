@@ -1,5 +1,7 @@
 # Agent Diff Gate
 
+[![CI](https://github.com/vartiainen1/agent-diff-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/vartiainen1/agent-diff-gate/actions/workflows/ci.yml)
+
 **The pre-commit quality gate for AI-generated code.** A zero-dependency CLI
 that sits between your AI coding agent and `git commit`, scans the diff, and
 flags the churn / vulnerability patterns AI-generated code tends to produce —
@@ -96,7 +98,14 @@ GATE: FAIL — fail-on 'high', 9 finding(s)
 
 ## Install
 
-The whole tool is one file:
+**From PyPI** (zero dependencies, stdlib only):
+
+```sh
+pip install agent-diff-gate
+diff-gate --help        # the console command
+```
+
+**Or copy the single file** — the whole tool is one file:
 
 ```sh
 cp check_diff.py /path/to/your/repo/
