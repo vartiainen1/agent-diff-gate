@@ -532,6 +532,15 @@ ACTIVE / RECENT ENTRIES
        pointing at the built-in rules section and the appearing classes
   STATUS: FIXED.
 
+[2026-08-11] AREA: README consistency audit fixes - section order, companion badges, title casing
+  ERROR: README audit found diff-gate deviated from the family order -
+         Security/Limits sat before Development, companion tools used
+         bullets instead of the family table, H1 was Title Case
+  CAUSE: the largest README evolved its own structure over rounds
+  FIX: reordered to Development -> Security -> Limits; Companion tools
+       converted to the family table; title unified to lowercase
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

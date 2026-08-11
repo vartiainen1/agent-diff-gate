@@ -1,4 +1,4 @@
-# Agent Diff Gate
+# agent-diff-gate
 
 [![CI](https://github.com/vartiainen1/agent-diff-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/vartiainen1/agent-diff-gate/actions/workflows/ci.yml)
 [![checks on master](https://img.shields.io/github/checks-status/vartiainen1/agent-diff-gate/master)](https://github.com/vartiainen1/agent-diff-gate/actions)
@@ -272,6 +272,18 @@ with the Python standard library. No AST dependency, no per-language SDKs.
 --git`), and use the CI `commit-gate` job as the server-side backstop —
 where `--no-verify` cannot reach.
 
+## Development
+
+`python _test_diff.py` — **170 tests** covering the diff parser, all
+fourteen built-in rules + plugins (happy + negative + edge), the severity
+gate model, the error-log tooling, and process-style output-value
+integration tests. `all 170 should pass`. The suite runs on
+**Python 3.9 / 3.11 / 3.12 across Ubuntu and Windows** in CI, plus a
+packaging job that builds the wheel and smoke-tests the `diff-gate` console
+script. README test counts are enforced by a drift-guard CI job.
+
+Releases are cut from `CHANGELOG.md` (Keep a Changelog / SemVer) by the
+release workflow — see `CHANGELOG.md` and `CONTRIBUTING.md`.
 ## Security
 
 The gate analyzes **untrusted input** (hostile diffs, third-party plugins),
@@ -292,26 +304,12 @@ so it is hardened where it counts:
 
 Full details: [`SECURITY.md`](SECURITY.md). To report a vulnerability,
 follow the private-advisory path documented there — never a public issue.
-
 ## Limits
 
 - **Heuristic linter, not a SAST scanner** — it can miss real
   vulnerabilities and can report false positives. Treat findings as review
   aids, not proof of security.
 - Scans diffs up to **8 MiB**; the gate is deterministic and offline.
-
-## Development
-
-`python _test_diff.py` — **170 tests** covering the diff parser, all
-fourteen built-in rules + plugins (happy + negative + edge), the severity
-gate model, the error-log tooling, and process-style output-value
-integration tests. `all 170 should pass`. The suite runs on
-**Python 3.9 / 3.11 / 3.12 across Ubuntu and Windows** in CI, plus a
-packaging job that builds the wheel and smoke-tests the `diff-gate` console
-script. README test counts are enforced by a drift-guard CI job.
-
-Releases are cut from `CHANGELOG.md` (Keep a Changelog / SemVer) by the
-release workflow — see `CHANGELOG.md` and `CONTRIBUTING.md`.
 
 ## Rules detail
 
@@ -423,14 +421,17 @@ lessons in `rules.txt`. Run `python start.py` at the start of a session.
 
 ## Companion tools
 
-The gate is the **enforcement layer** of the agent-memory family. It embeds
-its own error-log discipline (above) so a team can adopt it standalone; for
-cross-project memory, pair it with the siblings:
+The gate is the **enforcement layer** of the agent-memory family — same
+shape, same lifecycle verbs, four layers. It embeds its own error-log
+discipline (above) so a team can adopt it standalone; for cross-project
+memory, pair it with the siblings:
 
-- **agent-error-log** — reactive memory: what BROKE and how it was fixed
-- **agent-decision-log** — proactive memory: what was CHOSEN and why
-- **agent-log-ai** — reasoning layer: why it kept happening
-- **agent-diff-gate** (this repo) — enforcement layer: catch it before commit
+| Repo | What it remembers | How it works |
+|---|---|---|
+| [agent-error-log](https://github.com/vartiainen1/agent-error-log) | what BROKE | text log + linter + git gate |
+| [agent-decision-log](https://github.com/vartiainen1/agent-decision-log) | what was CHOSEN and why | append-only decisions + currency chain |
+| [agent-log-ai](https://github.com/vartiainen1/agent-log-ai) | *why* it kept happening | heuristics select → LLM reasons |
+| **agent-diff-gate (this)** | what must never be COMMITTED | pre-commit diff scan + gate |
 
 ## Installing with pip (optional)
 
@@ -467,7 +468,7 @@ except R6 and R9).
 
 | | |
 |---|---|
-| Commits scanned | 45 (~5,700 diff lines) |
+| Commits scanned | 46 (~5,800 diff lines) |
 | Findings | **194** — 36 HIGH · 151 MEDIUM · 7 LOW |
 | Classes | R4 ×103 · R8 ×20 · R13 ×13 · R10 ×12 · R2 ×10 · R3 ×9 · R14 ×7 · R11 ×7 · R1 ×4 · R12 ×4 · R5 ×4 · R7 ×1 |
 | Suppressed | **none** — every finding is fixed, tracked in `errors.txt`, or documented here |
