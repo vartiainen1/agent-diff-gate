@@ -144,6 +144,12 @@ ACTIVE / RECENT ENTRIES
   FIX: a line matched by a token pattern no longer emits the generic credential finding as well; one R1 finding per line.
   STATUS: FIXED.
 
+[2026-08-11] AREA: feature request: add R6 hardcoded URLs, R7 missing input validation, R8 eval/exec rules
+  ERROR: the gate only covers R1-R5; AI-generated code also hardcodes URLs, converts raw user/request input without validation, and calls eval/exec - the three most-requested rule classes
+  CAUSE: feature request from the user; must follow the family standard - positive AND negative tests, no false positives on clean code
+  FIX: implement R6/R7/R8 with anchored regexes, comment-skip, try-scope awareness (R7); add 13 tests; sync counts to 75; commit through the gate
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

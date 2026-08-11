@@ -8,6 +8,9 @@ the churn / vulnerability patterns AI-generated code tends to produce:
   R3 missing-error-handling  open()/int()/json.loads() outside try/with (Python)
   R4 duplicate-logic         identical statements added repeatedly (copy-paste)
   R5 ignores-existing        redefines a symbol that already exists in the file
+  R6 hardcoded-url           http(s):// endpoints baked into code (LOW)
+  R7 missing-input-validation  int(input(...)) / parseInt(req.query...) raw (MEDIUM)
+  R8 dangerous-eval-exec     eval()/exec()/compile()/new Function/shell=True (MEDIUM)
 
 Stdlib only, zero dependencies, works offline. Run from a git repo:
 
@@ -187,6 +190,9 @@ R2_NAME = "silent-failure"
 R3_NAME = "missing-error-handling"
 R4_NAME = "duplicate-logic"
 R5_NAME = "ignores-existing"
+R6_NAME = "hardcoded-url"
+R7_NAME = "missing-input-validation"
+R8_NAME = "dangerous-eval-exec"
 
 RULES = {
     "R1": R1_NAME,
@@ -194,6 +200,9 @@ RULES = {
     "R3": R3_NAME,
     "R4": R4_NAME,
     "R5": R5_NAME,
+    "R6": R6_NAME,
+    "R7": R7_NAME,
+    "R8": R8_NAME,
 }
 
 SECRET_PATTERNS = [
@@ -230,12 +239,39 @@ VAR_FN_RE = re.compile(
     r"^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:function\b|\(|async\b)"
 )
 
+# R6: hardcoded URLs on added lines (placeholder / docs hosts allowed)
+URL_RE = re.compile(r"https?://([A-Za-z0-9._-]+)")
+URL_ALLOW_HOSTS = {
+    "localhost", "127.0.0.1", "0.0.0.0", "::1",
+    "example.com", "example.org", "example.net",
+    "www.w3.org", "json-schema.org", "schemas.xmlsoap.org", "tools.ietf.org",
+    "developer.mozilla.org", "docs.python.org", "python.org",
+    "react.dev", "reactjs.org", "nodejs.org", "keepachangelog.com", "semver.org",
+}
+# R7: conversion of raw user/request input without validation (Python + JS)
+PY_RAW_INPUT_CONV_RE = re.compile(r"\b(int|float)\s*\(\s*input\s*\(")
+JS_RAW_PARSE_RE = re.compile(
+    r"\b(?:parseInt|parseFloat|Number)\s*\(\s*"
+    r"(?:req|request|ctx|event)\.(?:query|params|body)\b"
+)
+# R8: dynamic code execution. (?<![\w.]) keeps re.compile / regex .exec()
+# clean - a bare \b boundary would false-positive on member access
+EVAL_EXEC_RE = re.compile(r"(?<![\w.])(?:eval|exec|compile)\s*\(")
+NEW_FUNCTION_RE = re.compile(r"\bnew\s+Function\s*\(")
+SHELL_TRUE_RE = re.compile(
+    r"\bsubprocess\.(?:run|Popen|call|check_call|check_output)\s*\("
+    r"[^)]*\bshell\s*=\s*True\b"
+)
+
 DEFAULT_SUGGEST = {
     R1_NAME: "load secrets from environment / a secret store; never commit tokens",
     R2_NAME: "let the error surface (log + re-raise) or handle it; do not swallow it",
     R3_NAME: "wrap in try/except (FileNotFoundError/OSError/ValueError) or use with",
     R4_NAME: "extract the repeated statement into one shared helper and call it",
     R5_NAME: "reuse the existing symbol instead of redefining it",
+    R6_NAME: "move the endpoint to configuration / an environment variable",
+    R7_NAME: "validate the input first and handle conversion errors (try/except ValueError, Number.isNaN)",
+    R8_NAME: "avoid executing strings as code; prefer ast.literal_eval / json.loads / a parser, or sanitize strictly",
 }
 
 
@@ -423,6 +459,91 @@ def rule_ignores_existing(f: DiffFile, root: Path) -> list[tuple]:
     return out
 
 
+def _looks_commented(t: str) -> bool:
+    """True for lines that are clearly comments / docstrings."""
+    s = t.lstrip()
+    return s.startswith(("#", "//", "/*", "*", '"""', "'''"))
+
+
+def rule_hardcoded_url(f: DiffFile) -> list[tuple]:
+    out = []
+    for ln in f.added:
+        if _looks_commented(ln.text):
+            continue
+        for m in URL_RE.finditer(ln.text):
+            host = m.group(1).lower().rstrip(".")
+            if host in URL_ALLOW_HOSTS:
+                continue
+            out.append((
+                "LOW", "R6", f.path, ln.lineno,
+                f"hardcoded URL '{m.group(0)[:44]}' - endpoint baked into code",
+                DEFAULT_SUGGEST[R6_NAME],
+            ))
+    return out
+
+
+def rule_missing_input_validation(f: DiffFile) -> list[tuple]:
+    if not (f.path.endswith(".py")
+            or f.path.endswith((".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs"))):
+        return []
+    out = []
+    for run in f.added_runs:
+        try_seen = False
+        for ln in run:
+            t = ln.text
+            if re.search(r"\btry\s*[:{]", t):
+                try_seen = True
+            if re.match(r"^\s*(except|finally|catch)\b", t):
+                try_seen = False
+            if _looks_commented(t) or try_seen:
+                continue
+            if re.search(PY_RAW_INPUT_CONV_RE, t):
+                out.append((
+                    "MEDIUM", "R7", f.path, ln.lineno,
+                    "int()/float() applied directly to input() - "
+                    "unvalidated user input can raise ValueError",
+                    DEFAULT_SUGGEST[R7_NAME],
+                ))
+            elif re.search(JS_RAW_PARSE_RE, t):
+                out.append((
+                    "MEDIUM", "R7", f.path, ln.lineno,
+                    "request/query/body value parsed without validation - "
+                    "may be NaN / undefined",
+                    DEFAULT_SUGGEST[R7_NAME],
+                ))
+    return out
+
+
+def rule_dangerous_eval_exec(f: DiffFile) -> list[tuple]:
+    out = []
+    for ln in f.added:
+        t = ln.text
+        if _looks_commented(t):
+            continue
+        if re.search(EVAL_EXEC_RE, t):
+            out.append((
+                "MEDIUM", "R8", f.path, ln.lineno,
+                "eval()/exec()/compile() executes a string as code - "
+                "arbitrary-code-execution risk",
+                DEFAULT_SUGGEST[R8_NAME],
+            ))
+        if re.search(NEW_FUNCTION_RE, t):
+            out.append((
+                "MEDIUM", "R8", f.path, ln.lineno,
+                "new Function(...) builds code from a string - "
+                "arbitrary-code-execution risk",
+                DEFAULT_SUGGEST[R8_NAME],
+            ))
+        if re.search(SHELL_TRUE_RE, t):
+            out.append((
+                "MEDIUM", "R8", f.path, ln.lineno,
+                "subprocess with shell=True - command-injection risk with "
+                "untrusted input",
+                DEFAULT_SUGGEST[R8_NAME],
+            ))
+    return out
+
+
 # ===========================================================================
 # analysis + output
 # ===========================================================================
@@ -481,6 +602,12 @@ def analyze(
         for sev, rule, file, line, msg, sugg in rule_duplicate_logic(f):
             add(sev, rule, file, line, msg, sugg)
         for sev, rule, file, line, msg, sugg in rule_ignores_existing(f, root):
+            add(sev, rule, file, line, msg, sugg)
+        for sev, rule, file, line, msg, sugg in rule_hardcoded_url(f):
+            add(sev, rule, file, line, msg, sugg)
+        for sev, rule, file, line, msg, sugg in rule_missing_input_validation(f):
+            add(sev, rule, file, line, msg, sugg)
+        for sev, rule, file, line, msg, sugg in rule_dangerous_eval_exec(f):
             add(sev, rule, file, line, msg, sugg)
 
     return findings[:max_findings] if max_findings > 0 else findings

@@ -493,6 +493,150 @@ class TestRules(unittest.TestCase):
         self.assertEqual([f for f in finds if f.rule == "R5"], [])
 
 
+    # --- R6 hardcoded URLs ----------------------------------------------
+    def test_r6_hardcoded_url(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++url = "https://api.stripe.com/v1/charges"
+"""
+        finds = findings_for(d, "R6")
+        self.assertTrue(any(f.rule == "R6" and f.severity == "LOW" for f in finds))
+        self.assertTrue(any("hardcoded URL" in f.message for f in finds))
+
+    def test_r6_comment_url_ok(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++# see https://docs.python.org/3/library/json.html
+"""
+        finds = findings_for(d, "R6")
+        self.assertEqual([f for f in finds if f.rule == "R6"], [])
+
+    def test_r6_placeholder_hosts_ok(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++BASE = "http://localhost:8000"
++ping("https://example.com")
+"""
+        finds = findings_for(d, "R6")
+        self.assertEqual([f for f in finds if f.rule == "R6"], [])
+
+    # --- R7 missing input validation ------------------------------------
+    def test_r7_int_input_python(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++port = int(input("port: "))
+"""
+        finds = findings_for(d, "R7")
+        self.assertTrue(any(f.rule == "R7" and f.severity == "MEDIUM" for f in finds))
+
+    def test_r7_js_request_parse(self):
+        d = """diff --git a/x.js b/x.js
+--- a/x.js
++++ b/x.js
+@@ -1 +1,2 @@
+ ok
++const page = parseInt(req.query.page, 10);
+"""
+        finds = findings_for(d, "R7")
+        self.assertTrue(any("NaN" in f.message for f in finds))
+
+    def test_r7_in_try_ok(self):
+        # a conversion guarded by try/except is validated - no finding
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,6 @@
+ ok
++try:
++    port = int(input("port: "))
++except ValueError:
++    port = 8080
+"""
+        finds = findings_for(d, "R7")
+        self.assertEqual([f for f in finds if f.rule == "R7"], [])
+
+    def test_r7_literal_ok(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++port = int("8080")
+"""
+        finds = findings_for(d, "R7")
+        self.assertEqual([f for f in finds if f.rule == "R7"], [])
+
+    # --- R8 dangerous eval/exec -----------------------------------------
+    def test_r8_eval(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++result = eval(user_code)
+"""
+        finds = findings_for(d, "R8")
+        self.assertTrue(any(f.rule == "R8" and f.severity == "MEDIUM" for f in finds))
+
+    def test_r8_exec_and_new_function(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++exec(code)
++const f = new Function("return 1");
+"""
+        finds = findings_for(d, "R8")
+        self.assertEqual(len([f for f in finds if f.rule == "R8"]), 2)
+
+    def test_r8_shell_true(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++subprocess.run("ls " + path, shell=True)
+"""
+        finds = findings_for(d, "R8")
+        self.assertTrue(any("shell=True" in f.message for f in finds))
+
+    def test_r8_re_compile_not_flagged(self):
+        # member access (.compile) must stay clean - a bare \b boundary
+        # would false-positive here
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++pattern = re.compile("x")
+"""
+        finds = findings_for(d, "R8")
+        self.assertEqual([f for f in finds if f.rule == "R8"], [])
+
+    def test_r8_comment_ok(self):
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++# eval is dangerous - do not use it
+"""
+        finds = findings_for(d, "R8")
+        self.assertEqual([f for f in finds if f.rule == "R8"], [])
+
 # ===========================================================================
 # gate / severity model
 # ===========================================================================
@@ -727,6 +871,25 @@ class TestIntegration(unittest.TestCase):
         rc, out = run_tool("--stdin", "--exclude", "app.py", stdin=SECRET_DIFF)
         self.assertEqual(rc, 0)
         self.assertIn("GATE: PASS", out)
+
+    def test_new_rules_r6_r7_r8_process(self):
+        # every rule must be reachable through the real CLI (process-style)
+        d = """diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -1,5 +1,8 @@
+ def main():
+     cfg = load()
++    url = "https://api.stripe.com/v1"
++    port = int(input("port: "))
++    result = eval(user_code)
+     return cfg
+"""
+        rc, out = run_tool("--stdin", "--rule", "R6,R7,R8", "--fail-on", "medium", "--json", stdin=d)
+        self.assertEqual(rc, 1)
+        payload = json.loads(out)
+        self.assertEqual(payload["gate"], "FAIL")
+        self.assertEqual({f["rule"] for f in payload["findings"]}, {"R6", "R7", "R8"})
 
     def test_version(self):
         rc, out = run_tool("--version")

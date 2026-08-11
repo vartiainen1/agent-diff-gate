@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   AI-generated code tends to produce, before the code reaches a PR.
 - **Diff sources:** working tree (`git diff`), staged (`--staged`), commit
   range (`--range A B`), stdin (`--stdin`), or a saved diff file (`--file`).
-- **Five rules:**
+- **Eight rules:**
   - R1 `hardcoded-secrets` (HIGH) — GitHub tokens, `sk-` API keys, AWS keys,
     private keys, credential literals (placeholders and env lookups ignored).
   - R2 `silent-failure` (HIGH/MEDIUM) — `except: pass`, empty handlers, bare
@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   - R4 `duplicate-logic` (MEDIUM) — identical statements added 2+ times.
   - R5 `ignores-existing` (MEDIUM) — redefines a symbol already in the file
     (diff-context aware, works offline).
+  - R6 `hardcoded-url` (LOW) — `http(s)://` endpoints baked into added
+    lines; comments and placeholder/docs hosts ignored.
+  - R7 `missing-input-validation` (MEDIUM) — `int(input(...))` /
+    `parseInt(req.query…)` converting raw input without a guard (try-aware).
+  - R8 `dangerous-eval-exec` (MEDIUM) — `eval()`/`exec()`/`compile()`,
+    `new Function(...)`, `subprocess` with `shell=True`.
 - **Gate model:** `--fail-on high|medium|low|none`, `--warn-only`,
   `--rule R1,R2`, `--exclude GLOB`, `--max-findings N`, `--json` output.
   Exit codes: 0 pass / 1 findings / 2 usage error.
@@ -34,8 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 62 tests including process-style
-  output-value integration tests. all 62 should pass.
+- **Tests:** `_test_diff.py` — 75 tests including process-style
+  output-value integration tests. all 75 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 

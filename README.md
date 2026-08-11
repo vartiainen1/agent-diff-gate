@@ -28,7 +28,7 @@ Agent Diff Gate is **local, free, offline, and deterministic** — a single
 stdlib Python file you can drop into any repo, with no network and no data
 leaving the machine.
 
-## The five rules
+## The eight rules
 
 | Rule | Pattern | Severity |
 |------|---------|----------|
@@ -37,6 +37,9 @@ leaving the machine.
 | R3 `missing-error-handling` | `open()` / `int()` / `json.loads()` outside try/with (Python) | MEDIUM |
 | R4 `duplicate-logic` | identical statements added repeatedly (copy-paste) | MEDIUM |
 | R5 `ignores-existing` | redefines a symbol already in the file | MEDIUM |
+| R6 `hardcoded-url` | `http(s)://` endpoints baked into code (comments / placeholder hosts ignored) | LOW |
+| R7 `missing-input-validation` | `int(input(...))` / `parseInt(req.query…)` without a guard | MEDIUM |
+| R8 `dangerous-eval-exec` | `eval()` / `exec()` / `compile()` / `new Function` / `shell=True` | MEDIUM |
 
 Every finding reports `file:line`, the rule, a plain-language message, and a
 concrete suggestion.
@@ -135,6 +138,23 @@ file's unchanged lines — the AI re-implemented something that was already
 there. Removed+added same-name pairs are treated as legitimate replacements,
 not duplicates.
 
+### R6 — hardcoded URLs (LOW)
+`http(s)://` endpoints committed in added lines — the URL the code will
+talk to becomes impossible to change without a code change. Comment and
+docstring lines, plus placeholder hosts (`localhost`, `127.0.0.1`,
+`example.com`, docs sites), are ignored.
+
+### R7 — missing input validation (MEDIUM)
+`int(input(...))` / `float(input(...))` (Python) and `parseInt(req.query…)`
+/ `Number(req.body…)` (JS) convert raw user/request input without a guard.
+Conversions inside try/except are considered validated and not flagged.
+
+### R8 — dangerous eval/exec (MEDIUM)
+`eval()` / `exec()` / `compile()` (Python), `new Function(...)` (JS) and
+`subprocess.run(..., shell=True)` execute strings as code — arbitrary-code /
+command-injection risk. Member access (`re.compile`, `pattern.exec`) is not
+flagged.
+
 ## Error-log discipline (this repo)
 
 This repo uses the **agent error-log system**: every error encountered is
@@ -144,9 +164,9 @@ Session notes live in `notes.txt`, distilled lessons in `rules.txt`. Run
 
 ## Tests
 
-`python _test_diff.py` — 62 tests covering the diff parser, all five rules
+`python _test_diff.py` — 75 tests covering the diff parser, all eight rules
 (happy + negative + edge), the gate model, the error-log tooling, and
-process-style output-value integration tests. all 62 should pass.
+process-style output-value integration tests. all 75 should pass.
 
 ## Companion tools
 
