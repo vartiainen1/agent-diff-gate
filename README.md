@@ -44,6 +44,11 @@ stdlib Python file (~77 KB, ~1,820 lines — the whole thing fits in one code
 review) you can drop into any repo, with no network and no data leaving the
 machine.
 
+Dogfood, not theory: the gate reviews its own diffs. The round that added
+`--allow-host` produced **15 findings on this codebase — including a docs
+claim the implementation didn't satisfy** — and every one was fixed or
+documented, none suppressed.
+
 ## Highlights
 
 - **14 built-in rules** — secrets, silent failures, missing error handling,
@@ -318,7 +323,9 @@ docstring lines, plus placeholder hosts (`localhost`, `127.0.0.1`,
 endpoints extend the allow-list at runtime with `--allow-host` or the
 `AGENT_DIFF_GATE_HOSTS` env var — subdomains of an allowed host are covered,
 host values are normalized (scheme/port/path/case stripped) — so no one has
-to fork the file.
+to fork the file. R6 flags all non-placeholder URLs in added lines, including
+test files. If your test fixtures use real endpoints, add `--exclude '*_test*'`
+or add the host to `--allow-host` — the escape hatch is explicit, never hidden.
 
 ### R7 — missing input validation (MEDIUM)
 `int(input(...))` / `float(input(...))` (Python) and `parseInt(req.query…)`

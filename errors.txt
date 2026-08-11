@@ -466,6 +466,12 @@ ACTIVE / RECENT ENTRIES
   FIX: (1) NEW --allow-host flag + AGENT_DIFF_GATE_HOSTS env var - R6 allow-list extensible at runtime (repeatable/comma-separated, dot-boundary subdomain match, hosts normalized on read), 5 pinning tests incl. a CLI-level test (165 -> 170 tests, all docs synced). (2) R6 became comment+docstring aware via _new_side_lines/_code_only with a pinning test - the gate caught its own docs/test-fixture URLs (dogfood: 15 findings on this round, every one resolved honestly, gate PASS 0 findings). (3) README honesty: measured size ~77 KB / ~1,820 lines with rules-vs-infra split (73% / 27%), measured performance ~0.4s per 10k diff lines, enforcement-layer positioning with the truthful 4-tool hierarchy, R11 config-file behavior and the R10-vs-R2 boundary documented; CHANGELOG [Unreleased] entry added.
   STATUS: FIXED.
 
+[2026-08-11] AREA: R6 test-file documentation line + dogfood proof-point in README (reviewer round 3)
+  ERROR: the R6 rules-detail says comment/docstring rows are ignored but does not say URLs in test files are still flagged by design, so --fail-on low users could be surprised by test-fixture findings; the README also does not carry the project's strongest proof point (the gate caught 15 findings in its own codebase)
+  CAUSE: R6 docs predate the reviewer's explicit-contract argument: --fail-on low must stay honest, and test files are committed code; the dogfood story was only told in replies, not in the README
+  FIX: R6 rules-detail gained the reviewer-prescribed line (URLs in test files are flagged by design - --fail-on low is an explicit contract; the escape hatch --exclude /*_test*/ + --allow-host is documented, never hidden); Why-this-exists gained the dogfood proof-point (15 findings on the tool's own codebase, all fixed or documented, none suppressed). No code change - R6 intentionally keeps no test-file heuristic.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 
