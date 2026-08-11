@@ -1,6 +1,10 @@
 # Agent Diff Gate
 
 [![CI](https://github.com/vartiainen1/agent-diff-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/vartiainen1/agent-diff-gate/actions/workflows/ci.yml)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)
+![Release](https://img.shields.io/github/v/release/vartiainen1/agent-diff-gate)
+![Dependencies: zero](https://img.shields.io/badge/dependencies-zero-brightgreen.svg)
 
 **The pre-commit quality gate for AI-generated code.** A zero-dependency,
 stdlib-only CLI that sits between your AI coding agent and `git commit`,
@@ -222,10 +226,10 @@ follow the private-advisory path documented there — never a public issue.
 
 ## Tests
 
-`python _test_diff.py` — **164 tests** covering the diff parser, all
+`python _test_diff.py` — **165 tests** covering the diff parser, all
 fourteen built-in rules + plugins (happy + negative + edge), the severity
 gate model, the error-log tooling, and process-style output-value
-integration tests. `all 164 should pass`. The suite runs on
+integration tests. `all 165 should pass`. The suite runs on
 **Python 3.9 / 3.11 / 3.12 across Ubuntu and Windows** in CI, plus a
 packaging job that builds the wheel and smoke-tests the `diff-gate` console
 script.

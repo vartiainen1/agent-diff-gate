@@ -47,7 +47,7 @@ Reading order:
 - The fourteen built-in rules (R1-R14) and every rules.d/ plugin must never
   produce false positives on clean code:
   every rule change needs a test, both positive and negative.
-- Validate my changes: run `python _test_diff.py` (all 164 should pass),
+- Validate my changes: run `python _test_diff.py` (all 165 should pass),
   `python check_diff.py --log` (log healthy), and compile-check the touched
   scripts. Verify OUTPUT VALUES, not just exit codes.
 

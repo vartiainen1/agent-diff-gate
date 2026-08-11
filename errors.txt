@@ -430,6 +430,12 @@ ACTIVE / RECENT ENTRIES
   FIX: README rewritten (badge row, highlights, full CLI reference with exit codes and JSON shape, hooks + Claude/Cursor integration, plugins, security, limits, tests, companion tools); repo description set; 18 discoverability topics added (ai, ai-agents, agentic-ai, claude-code, cursor, copilot, code-quality, code-review, llm, pre-commit, git-hooks, python, security, static-analysis, quality-gate, developer-tools, cli, ai-generated-code).
   STATUS: FIXED.
 
+[2026-08-11] AREA: shields.io badge hosts in R6 allow-list + README badge row (license/python/release/deps)
+  ERROR: R6 URL rule fires LOW findings on shields.io badge URLs, so the README cannot carry standard badge images; also the README test count idioms must follow the new pinning test (164 -> 165)
+  CAUSE: URL_ALLOW_HOSTS predates the README badge plan; badge images need img.shields.io allowed, and the new regression test bumps the suite count
+  FIX: img.shields.io + shields.io added to URL_ALLOW_HOSTS (R6) with pinning test test_r6_badge_hosts_ok (164 -> 165 tests, all docs synced); README badge row now shows CI + License MIT + Python 3.9+ + Release + Dependencies: zero.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

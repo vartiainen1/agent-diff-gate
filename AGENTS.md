@@ -62,5 +62,5 @@ git commit -m "fix <thing> (AREA: <what broke>)"
 `check_diff.py` is a pre-commit quality gate for AI-generated code. When
 you change a rule, update BOTH its positive and negative tests in
 `_test_diff.py` — a rule that fires on clean code is worse than no rule.
-Keep all 164 tests green and the README test count in sync (the CI drift
+Keep all 165 tests green and the README test count in sync (the CI drift
 guard enforces it).

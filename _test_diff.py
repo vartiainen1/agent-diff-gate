@@ -811,6 +811,19 @@ class TestRules(unittest.TestCase):
         finds = findings_for(d, "R6")
         self.assertEqual([f for f in finds if f.rule == "R6"], [])
 
+    def test_r6_badge_hosts_ok(self):
+        # README badge URLs (shields.io) must not trip the LOW finding
+        d = """diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++badge = "https://img.shields.io/badge/license-MIT-blue.svg"
++api = "https://shields.io/v1"
++"""
+        finds = findings_for(d, "R6")
+        self.assertEqual([f for f in finds if f.rule == "R6"], [])
+
     # --- R7 missing input validation ------------------------------------
     def test_r7_int_input_python(self):
         d = """diff --git a/x.py b/x.py
