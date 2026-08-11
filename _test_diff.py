@@ -813,7 +813,88 @@ class TestRules(unittest.TestCase):
         finds = findings_for(d, "R7")
         self.assertEqual([f for f in finds if f.rule == "R7"], [])
 
-    # --- R8 dangerous eval/exec -----------------------------------------
+    def test_r7_docstring_prose_skipped(self):
+        # docstring prose mentioning the patterns is not code (mirror of R3)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,7 @@
+ ok
++def read_port():
++    """Parses int(input()) from the user and float(input()) for ratios.
++    Validated upstream before use.
++    """
++    pass
++port = int(input("port: "))
+'''
+        finds = findings_for(d, "R7")
+        # docstring lines (3-5) stay silent...
+        self.assertEqual([f for f in finds if f.line in (3, 4, 5)], [])
+        # ...the real raw conversion after the docstring is still caught
+        self.assertTrue(any(f.line == 7 for f in finds))
+
+    def test_r7_one_line_docstring_skipped(self):
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,2 @@
+ ok
++    """Parses int(input("p")) directly."""
+'''
+        finds = findings_for(d, "R7")
+        self.assertEqual([f for f in finds if f.rule == "R7"], [])
+
+    def test_r7_try_comment_no_state_corruption(self):
+        # a '# try:' comment must NOT open the try scope, or real raw
+        # conversions after it would be hidden (regression: R7 scanned raw
+        # text and set try_seen from comment lines)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,3 @@
+ ok
++# try: wrapped upstream in utils.py
++port = int(input("port: "))
+'''
+        finds = findings_for(d, "R7")
+        self.assertTrue(any(f.line == 3 for f in finds))
+
+    def test_r7_js_comments_skipped(self):
+        # // and /* */ comment lines, and trailing // comments, must not
+        # fire the JS parse pattern
+        d = '''diff --git a/x.js b/x.js
+--- a/x.js
++++ b/x.js
+@@ -1 +1,5 @@
+ ok
++// parseInt(req.query.page) is validated in middleware
++/* Number(req.body.count) is clamped upstream */
++const page = parseInt(req.query.page, 10);
++const page2 = 1; // parseInt(req.query.page) validated upstream
+'''
+        finds = findings_for(d, "R7")
+        # comment lines (2, 3, 5) stay silent...
+        self.assertEqual([f for f in finds if f.line in (2, 3, 5)], [])
+        # ...the real parse is still flagged
+        self.assertTrue(any(f.line == 4 for f in finds))
+
+    def test_r7_docstring_opener_in_context_silenced(self):
+        # the docstring opener is an unchanged context line: added prose
+        # rows inside it are not code (mirror of R3's context fix)
+        d = '''diff --git a/x.py b/x.py
+--- a/x.py
++++ b/x.py
+@@ -1 +1,4 @@
+ """
++R7 reads int(input("port")) from the user.
++R7 casts float(input("ratio")) for the calc.
++R7 validates parseInt-style values upstream.
+ """
+'''
+        finds = findings_for(d, "R7")
+        self.assertEqual([f for f in finds if f.rule == "R7"], [])
+
+    # --- R8 dangerous eval/exec ------------------------------------------
     def test_r8_eval(self):
         d = """diff --git a/x.py b/x.py
 --- a/x.py

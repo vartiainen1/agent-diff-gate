@@ -653,39 +653,57 @@ def rule_hardcoded_url(f: DiffFile) -> list[tuple]:
     return out
 
 
-def rule_missing_input_validation(f: DiffFile) -> list[tuple]:
+def rule_missing_input_validation(f: DiffFile, root: Path) -> list[tuple]:
     if not (f.path.endswith(".py")
             or f.path.endswith((".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs"))):
         return []
     out = []
-    for run in f.added_runs:
-        try_seen = False
-        for ln in run:
-            t = ln.text
-            if re.search(r"\btry\s*[:{]", t):
-                try_seen = True
-
-            if re.match(r"^\s*(?:except|finally|catch)\b|^\s*}\s*(?:catch|finally)\b", t):
-                try_seen = False
-            if _looks_commented(t) or try_seen:
-                continue
-            if re.search(PY_RAW_INPUT_CONV_RE, t):
-                out.append((
-                    "MEDIUM", "R7", f.path, ln.lineno,
-                    "int()/float() applied directly to input() - "
-                    "unvalidated user input can raise ValueError",
-                    DEFAULT_SUGGEST[R7_NAME],
-                ))
-            elif re.search(JS_RAW_PARSE_RE, t):
-                out.append((
-                    "MEDIUM", "R7", f.path, ln.lineno,
-                    "request/query/body value parsed without validation - "
-                    "may be NaN / undefined",
-                    DEFAULT_SUGGEST[R7_NAME],
-                ))
+    # walk the whole new-side file (context AND added) so docstring and
+    # try/catch state opened by unchanged lines still guards the added rows
+    # inside them, and the file-backed seed covers openers before the first
+    # hunk (mirror of R3). _code_only strips # comments and docstring
+    # content; the extra // strip handles JS trailing comments; the
+    # _looks_commented guard catches full-line /* and * comment lines.
+    lines = _new_side_lines(f)
+    # try_seen carries across the whole file (context + added).
+    # Tradeoff: a try: context line whose closer is outside the diff
+    # leaves the scope open for later hunks, which can hide real
+    # unguarded conversions - accepted (a column-0 reset would
+    # false-reset unindented JS try bodies).
+    try_seen = False
+    in_doc = _docstring_state_before(f, root, lines)
+    for lineno, text, is_added in lines:
+        code, in_doc = _code_only(text, in_doc)
+        # JS uses // comments (and /* */); _code_only strips # only, so
+        # strip trailing // here too (whitespace-guarded: // inside URLs
+        # and strings is preserved; tradeoff: Python floor division
+        # 'a // b' also drops text after // - accepted, patterns after
+        # a // operator are vanishingly rare)
+        code = re.sub(r"(^|\s)//.*$", r"\1", code)
+        if not code.strip() or _looks_commented(code):
+            continue
+        if re.search(r"\btry\s*[:{]", code):
+            try_seen = True
+        if re.match(r"^\s*(?:except|finally|catch)\b"
+                    r"|^\s*}\s*(?:catch|finally)\b", code):
+            try_seen = False
+        if not is_added or try_seen:
+            continue
+        if re.search(PY_RAW_INPUT_CONV_RE, code):
+            out.append((
+                "MEDIUM", "R7", f.path, lineno,
+                "int()/float() applied directly to input() - "
+                "unvalidated user input can raise ValueError",
+                DEFAULT_SUGGEST[R7_NAME],
+            ))
+        elif re.search(JS_RAW_PARSE_RE, code):
+            out.append((
+                "MEDIUM", "R7", f.path, lineno,
+                "request/query/body value parsed without validation - "
+                "may be NaN / undefined",
+                DEFAULT_SUGGEST[R7_NAME],
+            ))
     return out
-
-
 
 def rule_dangerous_eval_exec(f: DiffFile) -> list[tuple]:
     out = []
@@ -1035,7 +1053,7 @@ def analyze(
             add(sev, rule, file, line, msg, sugg)
         for sev, rule, file, line, msg, sugg in rule_hardcoded_url(f):
             add(sev, rule, file, line, msg, sugg)
-        for sev, rule, file, line, msg, sugg in rule_missing_input_validation(f):
+        for sev, rule, file, line, msg, sugg in rule_missing_input_validation(f, root):
             add(sev, rule, file, line, msg, sugg)
         for sev, rule, file, line, msg, sugg in rule_dangerous_eval_exec(f):
             add(sev, rule, file, line, msg, sugg)

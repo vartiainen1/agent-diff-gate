@@ -17,8 +17,8 @@ SESSION NOTE (2026-08-11): agent-diff-gate v0.1.0 BUILT — first session
 - Dogfooding caught 3 real bugs, all logged in errors.txt before fixing:
   R3 try-scope never reset after except; R5 ignored the diff's own context
   lines in offline mode; R3 reset regex missed typed except handlers.
-- 132 tests green (parser + rules + gate + log tooling + process-style
-  output-value integration). README count 132 verified by the drift guard.
+- 137 tests green (parser + rules + gate + log tooling + process-style
+  output-value integration). README count 137 verified by the drift guard.
 - Kit shipped: README, rules.txt, errors.txt, notes.txt, CHANGELOG,
   AGENTS.md, pyproject.toml, SECURITY, CONTRIBUTING, CoC, LICENSE, hooks/
   installer + commit-msg hook, CI + release + publish workflows, start.py.

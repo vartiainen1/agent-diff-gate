@@ -305,6 +305,17 @@ ACTIVE / RECENT ENTRIES
        finding -> 0. 132 tests, drift guard OK.
   STATUS: FIXED.
 
+[2026-08-11] AREA: R7 raw-line scanning - no comment/docstring awareness, flags prose and has the try-comment corruption bug
+  ERROR: R7 scans added lines raw: docstring prose mentioning int(input(...)) or parseInt(req.query...) fires, one-line docstrings on code lines fire, and a '# try:' comment sets try_seen and hides real conversions below it (the exact state-corruption bug R3 fixed)
+  CAUSE: rule_missing_input_validation matches on ln.text with only a full-line _looks_commented() startswith check; no docstring state machine, no comment stripping before try/except detection, and try_seen resets per added-run so context try:/docstring openers are invisible
+  FIX: R7 now walks the whole new-side file through _code_only() with
+       cross-context docstring/try state and a file-backed opener seed
+       (mirror of R3), plus a whitespace-guarded // strip for JS and
+       the _looks_commented() guard for /* * lines. Docstring prose,
+       one-line docstrings, and '# try:' comments no longer fire or
+       corrupt state. 5 new tests, 137 green, drift guard OK.
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

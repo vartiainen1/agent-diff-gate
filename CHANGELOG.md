@@ -57,8 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   CI (tests + linter + drift guard + commit gate), release + publish
   workflows, README with drift-guarded test count, AGENTS.md, SECURITY,
   CONTRIBUTING, Code of Conduct, MIT license.
-- **Tests:** `_test_diff.py` — 132 tests including process-style
-  output-value integration tests. all 132 should pass.
+- **Tests:** `_test_diff.py` — 137 tests including process-style
+  output-value integration tests. all 137 should pass.
 
 ### Fixed (dogfood, logged in errors.txt before fixing)
 
@@ -88,6 +88,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   file's lines before the first hunk, silencing rows added
   mid-docstring even when the opener predates the diff entirely
   (dogfood: ecfab7f's R9/R10/R11 rows, 1 finding -> 0).
+
+- R7 scanned raw added lines: docstring prose and one-line docstrings
+  mentioning int(input())/parseInt(req.query...) fired, and a
+  '# try:' comment opened the try scope and hid real conversions
+  below it. The rule now walks the whole new-side file through
+  _code_only() (comment/docstring stripping, state carried across
+  context lines, file-backed opener seed - mirror of R3) plus a
+  whitespace-guarded // strip for JS trailing comments and the
+  _looks_commented() guard for full-line /* and * comment lines.
 
 ## [0.0.0] — placeholder (never released)
 
