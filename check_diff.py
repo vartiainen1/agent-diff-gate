@@ -293,9 +293,15 @@ RULES = {
     "R14": R14_NAME,
 }
 
+# Token patterns aligned with agent-memory's detector (EVIDENCE-020 drift
+# fix, reviewed 2026-08-13): memory uses ghp_{20,}, sk-{16,} and a
+# gh[ousr]_ class the gate lacked entirely, so tokens memory rejects passed
+# the gate. The gate keeps its \b word boundaries (deliberate: no match
+# inside longer identifiers); the drift was length/class, not boundary.
 SECRET_PATTERNS = [
-    (r"\bghp_[A-Za-z0-9]{36}\b", "GitHub personal access token"),
-    (r"\bsk-[A-Za-z0-9]{20,}\b", "API key (sk-...)"),
+    (r"\bghp_[A-Za-z0-9]{20,}\b", "GitHub personal access token"),
+    (r"\bgh[ousr]_[A-Za-z0-9]{20,}\b", "GitHub token (gho_/ghu_/ghs_/ghr_)"),
+    (r"\bsk-[A-Za-z0-9]{16,}\b", "API key (sk-...)"),
     (r"\bAKIA[0-9A-Z]{16}\b", "AWS access key ID"),
     (r"-----BEGIN [A-Z ]*PRIVATE KEY-----", "private key block"),
 ]

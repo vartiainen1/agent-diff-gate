@@ -612,6 +612,18 @@ ACTIVE / RECENT ENTRIES
        round surfaced
   STATUS: FIXED.
 
+[2026-08-13] AREA: secret-detector token drift with agent-memory (ghp_/sk-/gh[ousr]_)
+  ERROR: the gate's SECRET_PATTERNS are stricter than agent-memory's, so tokens memory rejects pass the gate with 0 findings: 30-char ghp_ (gate requires exactly 36), 16-char sk- (gate requires 20+), and gho_/ghu_/ghs_/ghr_ tokens (absent from the gate entirely) - empirically confirmed by running both detectors on the same lines (EVIDENCE-020 documented this drift; fix was deferred to its own review)
+  CAUSE: the two family secret detectors were written independently and drifted; the memory side is the lenient one (ghp_{20,}, sk-{16,}, gh[ousr]_{20,}) and the gate is the strict one, so the enforcement hole is one-directional: memory blocks persistence, the gate admits the same token at commit
+  FIX: unified the gate's token patterns with agent-memory's (ghp_{20,},
+         added gh[ousr]_{20,}, sk-{16,}) keeping the gate's \b boundaries;
+         CRED_ASSIGN_RE untouched - bare 'api' extension was rejected after
+         empirical check (memory does not match bare api either, and it would
+         false-positive on api = "https://..." which a committed test
+         requires clean); +3 regression tests (177 total), README count
+         updated; verified both detectors agree on all 7 probe lines
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

@@ -225,6 +225,45 @@ class TestRules(unittest.TestCase):
 """
         finds = findings_for(d, "R1")
         self.assertTrue(any(f.rule == "R1" and f.severity == "HIGH" for f in finds))
+    def test_r1_short_ghp_token(self):
+        # drift fix (EVIDENCE-020): a 30-char ghp_ token passes the old gate
+        # (which required exactly 36) but is rejected by agent-memory
+        d = """diff --git a/x b/x
+--- a/x
++++ b/x
+@@ -1 +1,2 @@
+ ok
++ghp_abcdefghijklmnopqrstuvwxyzabcd
+"""
+        finds = findings_for(d, "R1")
+        self.assertTrue(any(f.rule == "R1" and f.severity == "HIGH" for f in finds))
+
+    def test_r1_gho_token(self):
+        # drift fix (EVIDENCE-020): gho_/ghu_/ghs_/ghr_ tokens were absent
+        # from the gate entirely while agent-memory rejects them
+        d = """diff --git a/x b/x
+--- a/x
++++ b/x
+@@ -1 +1,2 @@
+ ok
++gho_abcdefghijklmnopqrstuvwxyzabcde
+"""
+        finds = findings_for(d, "R1")
+        self.assertTrue(any(f.rule == "R1" and f.severity == "HIGH" for f in finds))
+
+    def test_r1_short_sk_key(self):
+        # drift fix (EVIDENCE-020): a 16-char sk- token passes the old gate
+        # (which required 20+) but is rejected by agent-memory
+        d = """diff --git a/x b/x
+--- a/x
++++ b/x
+@@ -1 +1,2 @@
+ ok
++key = "sk-abcdefghijklmnop"
+"""
+        finds = findings_for(d, "R1")
+        self.assertTrue(any(f.rule == "R1" and f.severity == "HIGH" for f in finds))
+
 
     def test_r1_sk_key(self):
         d = """diff --git a/x b/x

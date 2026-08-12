@@ -274,10 +274,10 @@ where `--no-verify` cannot reach.
 
 ## Development
 
-`python _test_diff.py` — **174 tests** covering the diff parser, all
+`python _test_diff.py` — **177 tests** covering the diff parser, all
 fourteen built-in rules + plugins (happy + negative + edge), the severity
 gate model, the error-log tooling, and process-style output-value
-integration tests. `all 174 should pass`. The suite runs on
+integration tests. `all 177 should pass`. The suite runs on
 **Python 3.9 / 3.11 / 3.12 across Ubuntu and Windows** in CI, plus a
 packaging job that builds the wheel and smoke-tests the `diff-gate` console
 script. README test counts and family structure are enforced by drift-guard CI jobs.
@@ -424,7 +424,7 @@ lessons in `rules.txt`. Run `python start.py` at the start of a session.
 Three layers of testing cover this tool — and the whole family is held to
 the same bar.
 
-**Unit suite** — `_test_diff.py` runs **174 tests** covering the parser,
+**Unit suite** — `_test_diff.py` runs **177 tests** covering the parser,
 lifecycle verbs, the hook contract, and regressions. The README test count
 is enforced by a drift-guard CI job, so it can never go stale.
 
