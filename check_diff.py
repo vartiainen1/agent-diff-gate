@@ -1569,19 +1569,22 @@ def cmd_archive(path: Path, days: int, apply: bool) -> int:
 
 
 def extract_area(msg: str) -> str:
-    """Pull the AREA:/LOG: marker out of a commit message (hook-compatible)."""
-    line = ""
-    for l in msg.splitlines():
-        if re.search(r"\b(AREA|LOG):", l, re.IGNORECASE):
-            line = l
-            break
-    m = re.search(r"(?:AREA|LOG):\s*(.+?)\s*$", line, re.IGNORECASE)
-    if not m:
-        return ""
-    area = m.group(1)
-    area = re.sub(r"\s*\(\s*#\d+\s*\)\s*$", "", area)  # GitHub squash-merge '(#NN)' suffix
-    area = re.sub(r"[),.;:]+[ \t]*$", "", area).strip()
-    return area
+    """Pull the AREA:/LOG: marker out of a commit message (hook-compatible).
+
+    Matches the shell hooks exactly: the first line that carries an
+    AREA:/LOG: marker, then the LAST marker on that line (the hooks use
+    'grep -m1' for the line and a greedy 'sed s/^.*(AREA|LOG):' for the
+    marker). The CI gate and the local hook therefore gate on the same text.
+    """
+    for line in msg.splitlines():
+        marks = list(re.finditer(r"(?:AREA|LOG)\s*:", line, re.IGNORECASE))
+        if not marks:
+            continue
+        area = line[marks[-1].end():]
+        area = re.sub(r"\s*\(\s*#\d+\s*\)\s*$", "", area)  # GitHub squash-merge '(#NN)' suffix
+        area = re.sub(r"[),.;:]+[ \t]*$", "", area)
+        return re.sub(r"\s+", " ", area).strip()
+    return ""
 
 
 def cmd_check_commit(log_text: str, msg_path: Path) -> int:

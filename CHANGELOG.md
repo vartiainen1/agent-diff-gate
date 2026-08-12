@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **`extract_area` now matches the family marker contract.** It previously
+  took the FIRST `AREA:`/`LOG:` marker and kept everything to end of line
+  (`(AREA: first) then (AREA: second)` extracted the garbage string
+  `first) then (AREA: second`), while the shell hook's greedy sed takes the
+  LAST marker on the FIRST marker-bearing line. It now follows the shared
+  contract exactly (first line, last marker on it, `(#NN)` squash suffix
+  stripped), so the CI gate and the local hook gate on identical text.
+  Pinned by 8 new tests (family finding #2).
+
 ## [0.2.0] - 2026-08-11
 
 ### Added

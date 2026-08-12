@@ -572,6 +572,15 @@ ACTIVE / RECENT ENTRIES
   FIX: 
   STATUS: FIXED.
 
+[2026-08-12] AREA: _extract_area marker mismatch with hooks
+  ERROR: extract_area() took the FIRST AREA:/LOG: marker and kept everything to end of line - (AREA: first) then (AREA: second) yielded the garbage 'first) then (AREA: second' while the shell hook's greedy sed takes the LAST marker on the first marker line
+  CAUSE: extract_area used re.search with a non-greedy group instead of the shared contract (first marker-bearing line, then LAST marker on it); error-log/decision-log/log-ai and both hooks already follow that contract
+  FIX: extract_area rewritten to the family contract - scan lines in order, take
+         the FIRST marker-bearing line, then the LAST AREA:/LOG: marker on it
+         (greedy-sed semantics), strip the (#NN) squash suffix and trailing
+         punctuation; 8 pinned tests (164 -> 172)
+  STATUS: FIXED.
+
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================
 

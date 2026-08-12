@@ -1803,6 +1803,24 @@ class TestLogTooling(unittest.TestCase):
         self.assertEqual(cd.extract_area("no marker here"), "")
         self.assertEqual(cd.extract_area("docs only"), "")
 
+    def test_extract_area_family_contract(self):
+        # first marker-bearing line wins; on that line the LAST marker wins
+        # (greedy-sed semantics shared with the shell hooks and siblings)
+        self.assertEqual(
+            cd.extract_area("fix: x (AREA: first) then (AREA: second)"), "second"
+        )
+        self.assertEqual(
+            cd.extract_area("feat: y\n\nbody (AREA: real area) (LOG: other)"), "other"
+        )
+        # first LINE wins even if a later line also carries a marker
+        self.assertEqual(
+            cd.extract_area("fix: a (AREA: subject)\n(AREA: body marker)"), "subject"
+        )
+        # LOG: works and squash-merge suffix is stripped
+        self.assertEqual(
+            cd.extract_area("fix: docs (LOG: doc fix) (#44)"), "doc fix"
+        )
+
     def test_has_entry(self):
         self.assertEqual(cd.cmd_has_entry(LOG_SAMPLE, "first bug"), 0)
         self.assertEqual(cd.cmd_has_entry(LOG_SAMPLE, "first"), 0)  # substring
