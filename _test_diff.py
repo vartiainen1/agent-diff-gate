@@ -2540,6 +2540,20 @@ class TestSecurityHardening(unittest.TestCase):
         self.assertNotIn("Traceback", out.getvalue())
 
 
+
+
+class TestCiGateMergeAware(unittest.TestCase):
+    def test_ci_gate_fetches_full_history(self):
+        ci = (Path(__file__).resolve().parent / ".github" / "workflows" / "ci.yml")
+        text = ci.read_text(encoding="utf-8")
+        self.assertIn("fetch-depth: 0", text)
+
+    def test_ci_gate_gates_authored_pr_tip_on_merges(self):
+        ci = (Path(__file__).resolve().parent / ".github" / "workflows" / "ci.yml")
+        text = ci.read_text(encoding="utf-8")
+        self.assertIn("HEAD^2", text)
+        self.assertIn("git rev-list --parents -n1 HEAD", text)
+
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
