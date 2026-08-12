@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- CI commit-message gate now gates the authored PR tip (HEAD^2)
+  on GitHub merge commits, so master stops showing a red X on
+  `gh pr merge --merge` merges (family finding, all four repos)
 
 - **`extract_area` now matches the family marker contract.** It previously
   took the FIRST `AREA:`/`LOG:` marker and kept everything to end of line
