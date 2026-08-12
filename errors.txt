@@ -595,7 +595,22 @@ ACTIVE / RECENT ENTRIES
   FIX: gate the authored PR tip (HEAD^2) instead when HEAD is a
        merge commit (fetch-depth: 0 so parents resolve); direct
        pushes are unchanged. Same fix in all four repos.
-  STATUS: OPEN.
+       VERIFIED 2026-08-12: PR #3 merged via a real merge commit; the
+       commit-message gate (log-before-fix) job passes on this repo's
+       master run (#31582504474) - merge commits accepted.
+  STATUS: FIXED.
+
+[2026-08-12] AREA: README Verification section documents the real battery record
+  ERROR: the README showed only unit-test counts and CI badges; the
+         real battery record (18,120 installed-binary executions, 0
+         failures) was invisible to users
+  CAUSE: the battery runs lived only in a scratch folder outside the
+         repos, so the strongest evidence never reached the README
+  FIX: README gained a Verification section documenting the four
+       battery rounds (500 -> 1,500 -> 4,000 -> 12,120 executions;
+       18,120 total, 0 failed) and the finding-to-fix trail each
+       round surfaced
+  STATUS: FIXED.
 
 EXAMPLE ENTRIES (replace with your own; delete this section header)
 ================================================================================

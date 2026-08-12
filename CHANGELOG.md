@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- README Verification section documents the real battery record
+  (18,120 installed-binary executions across four rounds, 0 failed).
+
+### Added
+
 ### Fixed
 - CI commit-message gate now gates the authored PR tip (HEAD^2)
   on GitHub merge commits, so master stops showing a red X on
